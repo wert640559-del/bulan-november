@@ -1,0 +1,6111 @@
+
+
+--- FILE: ./components/AddProductModal.tsx ---
+
+import { Modal, StyleSheet, View } from "react-native";
+import { Product, ProductFormData } from "../types";
+import ProductForm from "./ProductForm";
+import { useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+interface AddProductModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onAddProduct: (formData: ProductFormData) => Promise<void>;
+  editingProduct?: Product | null;
+  onUpdateProduct?: (productId: string, formData: ProductFormData) => Promise<void>;
+}
+
+export const AddProductModal: React.FC<AddProductModalProps> = ({
+    visible,
+    onClose,
+    onAddProduct
+}) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const insets = useSafeAreaInsets();
+
+    const handleSubmit = async (formData: ProductFormData) => {
+        setIsLoading(true);
+        try {
+            await onAddProduct(formData);
+            onClose();
+        } catch (error) {
+            // Error sudah dihandle di ProductForm
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={false}
+            onRequestClose={onClose}
+        >
+            <View style={[
+                styles.modalContainer,
+                { paddingTop: insets.top }
+            ]}>
+                <ProductForm
+                    onSubmit={handleSubmit}
+                    onCancel={onClose}
+                    isLoading={isLoading}
+                />
+            </View>
+        </Modal>
+    )
+}
+
+const styles = StyleSheet.create({
+    modalContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    }
+})
+
+--- FILE: ./components/ProductForm.tsx ---
+
+// FILE: ./components/ProductForm.tsx
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  StyleSheet, 
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity
+} from 'react-native';
+import { ProductFormData } from '../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+interface ProductFormProps {
+  onSubmit: (data: ProductFormData) => Promise<void>;
+  onCancel: () => void;
+  isLoading?: boolean;
+}
+
+const ProductForm: React.FC<ProductFormProps> = ({ onSubmit, onCancel, isLoading = false }) => {
+  const [formData, setFormData] = useState<{
+    name: string;
+    price: string;
+    image: any;
+    description: string;
+    category: string;
+    specificationsInput: string; // Input sementara sebagai string
+  }>({
+    name: '',
+    price: '',
+    image: { uri: '' },
+    description: '',
+    category: 'electronics',
+    specificationsInput: ''
+  });
+
+  const [errors, setErrors] = useState<Partial<ProductFormData>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const insets = useSafeAreaInsets();
+
+  // Daftar kategori yang tersedia
+  const categories = [
+    { value: 'electronics', label: '📱 Elektronik' },
+    { value: 'clothing', label: '👕 Pakaian' },
+    { value: 'jewelry', label: '💍 Perhiasan' },
+    { value: 'backpack', label: '🎒 Tas & Backpack' },
+    { value: 'home', label: '🏠 Perlengkapan Rumah' },
+    { value: 'sports', label: '⚽ Olahraga' },
+    { value: 'books', label: '📚 Buku' },
+    { value: 'beauty', label: '💄 Kecantikan' }
+  ];
+
+  const validateForm = (): boolean => {
+    const newErrors: Partial<ProductFormData> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Nama produk wajib diisi';
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'Nama produk minimal 2 karakter';
+    }
+
+    if (!formData.price.trim()) {
+      newErrors.price = 'Harga wajib diisi';
+    } else if (isNaN(Number(formData.price)) || Number(formData.price) <= 0) {
+      newErrors.price = 'Harga harus berupa angka positif';
+    }
+
+    if (!formData.image.uri.trim()) {
+      newErrors.image = 'Link gambar wajib diisi';
+    }
+
+    if (!formData.category) {
+      newErrors.category = 'Kategori wajib dipilih';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (validateForm()) {
+      setIsSubmitting(true);
+      
+      try {
+        const minimumDelay = new Promise<void>((resolve) => setTimeout(resolve, 1000));
+        
+        // Convert specificationsInput ke array untuk onSubmit
+        const specificationsArray = formData.specificationsInput 
+          ? formData.specificationsInput.split('\n').filter(spec => spec.trim() !== '')
+          : [];
+
+        // Prepare data untuk onSubmit dengan tipe yang benar
+        const formDataForSubmit: ProductFormData = {
+          name: formData.name,
+          price: formData.price,
+          image: formData.image,
+          description: formData.description,
+          category: formData.category,
+          specifications: specificationsArray // Ini sudah string[]
+        };
+
+        await Promise.all([
+          onSubmit(formDataForSubmit),
+          minimumDelay
+        ]);
+
+        // Reset form setelah submit berhasil
+        setFormData({
+          name: '',
+          price: '',
+          image: { uri: '' },
+          description: '',
+          category: 'electronics',
+          specificationsInput: ''
+        });
+        setErrors({});
+      } catch (error) {
+        Alert.alert('Error', 'Gagal menambah produk');
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  const handleChange = (field: keyof typeof formData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear error jika field diperbaiki
+    if (errors[field as keyof ProductFormData]) {
+      setErrors(prev => ({ ...prev, [field as keyof ProductFormData]: undefined }));
+    }
+  };
+
+  const handleImageChange = (uri: string) => {
+    setFormData(prev => ({ ...prev, image: { uri } }));
+    if (errors.image) {
+      setErrors(prev => ({ ...prev, image: undefined }));
+    }
+  };
+
+  const handleCategorySelect = (category: string) => {
+    setFormData(prev => ({ ...prev, category }));
+    if (errors.category) {
+      setErrors(prev => ({ ...prev, category: undefined }));
+    }
+  };
+
+  // Fungsi untuk load contoh produk
+  const loadExampleProduct = () => {
+    setFormData({
+      name: 'Acer SB220Q bi 21.5 inches Full HD (1920 x 1080) IPS Ultra-Thin',
+      price: '500000',
+      image: { uri: 'https://fakestoreapi.com/img/81QpkIctqPL._AC_SX679_.jpg' },
+      description: '21.5 inches Full HD (1920 x 1080) widescreen IPS display And Radeon free Sync technology. No compatibility for VESA Mount Refresh Rate: 75Hz - Using HDMI port Zero-frame design | ultra-thin | 4ms response time | IPS panel Aspect ratio - 16:9. Color Supported - 16.7 million colors. Brightness - 250 nit Tilt angle -5 degree to 15 degree. Horizontal viewing angle-178 degree. Vertical viewing angle-178 degree 75 hertz',
+      category: 'electronics',
+      specificationsInput: 'Display: 21.5 inches Full HD (1920 x 1080)\nPanel Type: IPS\nRefresh Rate: 75Hz\nResponse Time: 4ms\nAspect Ratio: 16:9\nConnectivity: HDMI\nFeatures: Zero-frame design, Ultra-thin'
+    });
+    setErrors({});
+  };
+
+  const isFormDisabled = isLoading || isSubmitting;
+
+  // Contoh specifications berdasarkan kategori
+  const getSpecificationsHint = () => {
+    switch (formData.category) {
+      case 'electronics':
+        return 'Masukkan spesifikasi, satu per baris:\nContoh:\n- Display: 21.5 inches Full HD\n- Panel Type: IPS\n- Refresh Rate: 75Hz\n- Response Time: 4ms';
+      case 'clothing':
+        return 'Masukkan spesifikasi, satu per baris:\nContoh:\n- Material: 100% Cotton\n- Ukuran: S, M, L, XL\n- Warna: Hitam, Putih, Navy\n- Perawatan: Mesin cuci';
+      case 'jewelry':
+        return 'Masukkan spesifikasi, satu per baris:\nContoh:\n- Material: Sterling Silver\n- Batu: Cubic Zirconia\n- Panjang: 45cm\n- Jenis: Kalung';
+      case 'backpack':
+        return 'Masukkan spesifikasi, satu per baris:\nContoh:\n- Kapasitas: 20L\n- Material: Nylon\n- Kompartemen: Laptop 15"\n- Fitur: Water resistant';
+      default:
+        return 'Masukkan spesifikasi produk, satu per baris\nContoh:\n- Material: ...\n- Ukuran: ...\n- Warna: ...';
+    }
+  };
+
+  return (
+    <ScrollView 
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: insets.bottom }
+      ]}
+      contentContainerStyle={styles.contentContainer}
+    >
+      <Text style={styles.formTitle}>Tambah Produk Baru</Text>
+      
+      {/* Tombol Contoh Produk */}
+      <TouchableOpacity 
+        style={styles.exampleButton}
+        onPress={loadExampleProduct}
+        disabled={isFormDisabled}
+      >
+        <Text style={styles.exampleButtonText}>📋 Load Contoh Produk Monitor</Text>
+      </TouchableOpacity>
+      
+      <View style={styles.form}>
+        {/* Nama Produk */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nama Produk *</Text>
+          <TextInput
+            style={[
+              styles.input,
+              errors.name && styles.inputError
+            ]}
+            value={formData.name}
+            onChangeText={(text) => handleChange('name', text)}
+            placeholder="Contoh: Acer SB220Q bi 21.5 inches Full HD IPS Ultra-Thin"
+            editable={!isFormDisabled}
+            multiline
+            numberOfLines={2}
+          />
+          {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+        </View>
+
+        {/* Harga */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Harga (Rp) *</Text>
+          <TextInput
+            style={[
+              styles.input,
+              errors.price && styles.inputError
+            ]}
+            value={formData.price}
+            onChangeText={(text) => handleChange('price', text)}
+            placeholder="Contoh: 500000"
+            keyboardType="numeric"
+            editable={!isFormDisabled}
+          />
+          {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+        </View>
+
+        {/* Link Gambar */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Link Gambar *</Text>
+          <TextInput
+            style={[
+              styles.input,
+              errors.image && styles.inputError
+            ]}
+            value={formData.image.uri}
+            onChangeText={handleImageChange}
+            placeholder="Contoh: https://fakestoreapi.com/img/81QpkIctqPL._AC_SX679_.jpg"
+            editable={!isFormDisabled}
+            multiline
+            numberOfLines={2}
+          />
+          {errors.image && <Text style={styles.errorText}>{errors.image}</Text>}
+          <Text style={styles.hintText}>
+            Gunakan link gambar dari FakeStoreAPI atau sumber terpercaya lainnya
+          </Text>
+        </View>
+
+        {/* Kategori */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Kategori *</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryContainer}
+          >
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.value}
+                style={[
+                  styles.categoryButton,
+                  formData.category === cat.value && styles.categoryButtonSelected
+                ]}
+                onPress={() => handleCategorySelect(cat.value)}
+                disabled={isFormDisabled}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  formData.category === cat.value && styles.categoryButtonTextSelected
+                ]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+        </View>
+
+        {/* Deskripsi */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Deskripsi Produk</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={formData.description}
+            onChangeText={(text) => handleChange('description', text)}
+            placeholder="Masukkan deskripsi lengkap produk..."
+            multiline
+            numberOfLines={6}
+            editable={!isFormDisabled}
+            textAlignVertical="top"
+          />
+          <Text style={styles.hintText}>
+            Jelaskan fitur, keunggulan, dan detail produk secara lengkap
+          </Text>
+        </View>
+
+        {/* Spesifikasi */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Spesifikasi Produk</Text>
+          <Text style={[styles.hintText, styles.specHint]}>
+            {getSpecificationsHint()}
+          </Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={formData.specificationsInput}
+            onChangeText={(text) => handleChange('specificationsInput', text)}
+            placeholder="Masukkan spesifikasi produk (satu per baris)..."
+            multiline
+            numberOfLines={6}
+            editable={!isFormDisabled}
+            textAlignVertical="top"
+          />
+          <Text style={styles.subHintText}>
+            * Setiap baris akan menjadi item spesifikasi terpisah
+          </Text>
+        </View>
+
+        {/* Preview Spesifikasi */}
+        {formData.specificationsInput && (
+          <View style={styles.previewContainer}>
+            <Text style={styles.previewTitle}>Preview Spesifikasi:</Text>
+            {formData.specificationsInput.split('\n')
+              .filter(spec => spec.trim() !== '')
+              .map((spec, index) => (
+                <Text key={index} style={styles.previewItem}>
+                  • {spec.trim()}
+                </Text>
+              ))
+            }
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.button, styles.cancelButton, isFormDisabled && styles.buttonDisabled]} 
+            onPress={onCancel}
+            disabled={isFormDisabled}
+          >
+            <Text style={styles.cancelButtonText}>Batal</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.button, styles.submitButton, isFormDisabled && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={isFormDisabled}
+          >
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.loadingText}>Memproses...</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>Tambah Produk</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Loading Overlay */}
+      {isSubmitting && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingMessage}>Menambahkan produk...</Text>
+            <Text style={styles.loadingSubmessage}>Harap tunggu sebentar</Text>
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+};
+
+// Styles tetap sama seperti sebelumnya
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff' 
+  },
+  contentContainer: { 
+    padding: 16,
+    flexGrow: 1,
+  },
+  formTitle: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: '#333', 
+    textAlign: 'center', 
+    marginBottom: 16 
+  },
+  exampleButton: {
+    backgroundColor: '#34C759',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  exampleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  form: {
+    flex: 1,
+  },
+  inputGroup: { 
+    marginBottom: 20 
+  },
+  label: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#333', 
+    marginBottom: 8 
+  },
+  input: { 
+    borderWidth: 1, 
+    borderColor: '#ddd', 
+    borderRadius: 8, 
+    padding: 12, 
+    fontSize: 16, 
+    backgroundColor: '#fff',
+    minHeight: 50,
+  },
+  textArea: { 
+    minHeight: 120, 
+    textAlignVertical: 'top' 
+  },
+  inputError: { 
+    borderColor: '#ff3b30' 
+  },
+  errorText: { 
+    color: '#ff3b30', 
+    fontSize: 12, 
+    marginTop: 4 
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  categoryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  categoryButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  categoryButtonTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+  specHint: {
+    marginBottom: 8,
+  },
+  subHintText: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  previewContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  previewItem: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  buttonContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginTop: 24, 
+    marginBottom: 20,
+    gap: 12,
+  },
+  button: { 
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  cancelButton: { 
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  submitButton: { 
+    backgroundColor: '#007AFF' 
+  },
+  buttonDisabled: { 
+    opacity: 0.6 
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8 
+  },
+  loadingText: { 
+    color: '#fff', 
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingOverlay: { 
+    position: 'absolute', 
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    bottom: 0, 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    zIndex: 1000 
+  },
+  loadingBox: { 
+    backgroundColor: '#fff', 
+    padding: 24, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    minWidth: 200 
+  },
+  loadingMessage: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#333', 
+    marginTop: 12, 
+    marginBottom: 4 
+  },
+  loadingSubmessage: { 
+    fontSize: 12, 
+    color: '#666', 
+    textAlign: 'center' 
+  },
+});
+
+export default ProductForm;
+
+--- FILE: ./components/ProductItem.tsx ---
+
+// FILE: ./components/ProductItem.tsx
+import { Image, StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { Product } from "../types";
+import { useNavigation } from "@react-navigation/native";
+
+interface ProductItemProps {
+    product: Product;
+}
+
+export const ProductItem: React.FC<ProductItemProps> = ({ product }) => {
+    const navigation = useNavigation();
+
+    const handlePress = () => {
+        // PERBAIKAN: Gunakan navigation yang benar
+        navigation.navigate('ProductDetail', { productId: product.id });
+    };
+
+    return (
+        <TouchableOpacity style={styles.container} onPress={handlePress} activeOpacity={0.7}>
+            {/* Image Container */}
+            <View style={styles.imageContainer}>
+                <Image
+                  source={product.image}
+                  style={styles.image}
+                  resizeMode="contain"
+                />
+            </View>
+
+            {/* Product Info */}
+            <View style={styles.info}>
+                <Text style={styles.name} numberOfLines={2}>
+                    {product.name}
+                </Text>
+                <Text style={styles.price}>
+                    Rp {product.price.toLocaleString('id-ID')}
+                </Text>
+                <Text style={styles.description} numberOfLines={1}>
+                    {product.description}
+                </Text>
+                
+                {/* Additional Marketplace Info */}
+                <View style={styles.marketplaceInfo}>
+                    <Text style={styles.rating}>⭐ 4.8</Text>
+                    <Text style={styles.sold}>• Terjual 100+</Text>
+                </View>
+            </View>
+        </TouchableOpacity>
+    )
+}
+
+const styles = StyleSheet.create({
+    container: {
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        marginHorizontal: 4,
+        marginBottom: 8,
+        padding: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    imageContainer: {
+        width: '100%',
+        height: 140,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 6,
+        marginBottom: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    image: {
+        width: '80%',
+        height: '80%',
+    },
+    info: {
+        paddingHorizontal: 4,
+    },
+    name: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: 4,
+        lineHeight: 16,
+        minHeight: 32,
+    },
+    price: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FF3B30',
+        marginBottom: 2,
+    },
+    description: {
+        fontSize: 10,
+        color: '#666',
+        marginBottom: 6,
+    },
+    marketplaceInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    rating: {
+        fontSize: 10,
+        color: '#666',
+    },
+    sold: {
+        fontSize: 10,
+        color: '#666',
+        marginLeft: 4,
+    },
+})
+
+--- FILE: ./components/ProductList.tsx ---
+
+// FILE: ./components/ProductList.tsx
+import React from "react"
+import { Product } from "../types"
+import { FlatList, StyleSheet, Text, View, useWindowDimensions, TouchableOpacity } from "react-native"
+import { ProductItem } from "./ProductItem"
+import { useNavigation } from "@react-navigation/native"
+
+interface ProductListProps {
+  products: Product[];
+  onEditProduct: (product: Product) => void;
+  onDeleteProduct: (productId: string) => void;
+  searchQuery?: string;
+  onProductPress: (product: Product) => void;
+  onAddToCart?: (product: Product) => void;
+}
+
+export const ProductList: React.FC<ProductListProps> = ({ 
+  products,
+  searchQuery = '',
+  onProductPress
+}) => {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const navigation = useNavigation();
+  
+  // Tentukan jumlah kolom berdasarkan orientasi layar
+  const numColumns = isLandscape ? 3 : 2;
+
+  // Hitung lebar item dengan margin
+  const itemWidth = (width - 24) / numColumns;
+
+  const renderGridItem = ({ item }: { item: Product }) => (
+    <TouchableOpacity 
+      style={[styles.gridItem, { width: itemWidth }]}
+      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+    >
+      <ProductItem product={item} />
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>
+        {searchQuery ? `Hasil pencarian "${searchQuery}"` : 'Semua Produk'} 
+        {` (${products.length})`}
+      </Text>
+      
+      {products.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+            {searchQuery ? 'Produk tidak ditemukan' : 'Belum ada produk'}
+          </Text>
+          <Text style={styles.emptyStateSubtext}>
+            {searchQuery ? 'Coba kata kunci lain' : 'Tambahkan produk pertama Anda'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={products}
+          key={`${numColumns}-columns`}
+          keyExtractor={(item) => item.id}
+          renderItem={renderGridItem}
+          numColumns={numColumns}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.gridContent}
+          columnWrapperStyle={styles.columnWrapper}
+        />
+      )}
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa'
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    padding: 16,
+    backgroundColor: '#fff',
+    marginBottom: 1,
+  },
+  gridContent: {
+    padding: 8,
+    paddingBottom: 16,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  gridItem: {
+    // Width dihitung secara dinamis
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+})
+
+--- FILE: ./components/SearchHeader.tsx ---
+
+// FILE: ./components/SearchHeader.tsx
+import React from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  StyleSheet, 
+  TouchableOpacity,
+  Animated 
+} from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+
+interface SearchHeaderProps {
+  searchVisible: boolean;
+  searchQuery: string;
+  onSearchToggle: () => void;
+  onSearchChange: (query: string) => void;
+  onAddProduct: () => void;
+  onCartPress: () => void; // Tambahkan prop baru untuk cart
+  cartItemCount?: number; // Tambahkan prop untuk jumlah item di cart
+}
+
+export const SearchHeader: React.FC<SearchHeaderProps> = ({
+  searchVisible,
+  searchQuery,
+  onSearchToggle,
+  onSearchChange,
+  onAddProduct,
+  onCartPress, // Terima prop baru
+  cartItemCount = 0 // Default 0
+}) => {
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (searchVisible) {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
+    }
+  }, [searchVisible]);
+
+  const slideInterpolate = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-50, 0],
+  });
+
+  const opacityInterpolate = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  if (searchVisible) {
+    return (
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={onSearchToggle}
+          >
+            <FontAwesome6 name="arrow-left" size={20} color="#333" iconStyle='solid' />
+          </TouchableOpacity>
+          
+          <Animated.View 
+            style={[
+              styles.searchInputContainer,
+              {
+                transform: [{ translateX: slideInterpolate }],
+                opacity: opacityInterpolate
+              }
+            ]}
+          >
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari produk..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={onSearchChange}
+              autoFocus={true}
+            />
+          </Animated.View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Rits Marketplace</Text>
+      
+      <View style={styles.headerButtons}>
+        {/* Tombol Pencarian */}
+        <TouchableOpacity 
+          style={styles.searchIconButton}
+          onPress={onSearchToggle}
+        >
+          <FontAwesome6 name="magnifying-glass" size={18} color="#333" iconStyle='solid'/>
+        </TouchableOpacity>
+        
+        {/* Tombol Keranjang dengan Badge */}
+        <TouchableOpacity 
+          style={styles.cartIconButton}
+          onPress={onCartPress}
+        >
+          <FontAwesome6 name="cart-shopping" size={18} color="#333" iconStyle='solid'/>
+          {cartItemCount > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>
+                {cartItemCount > 99 ? '99+' : cartItemCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        {/* Tombol Jual */}
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={onAddProduct}
+        >
+          <FontAwesome6 name="plus" size={16} color="#fff" iconStyle='solid'/>
+          <Text style={styles.addButtonText}>Jual</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    minHeight: 60,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FF3B30',
+    flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8, // Kurangi gap agar lebih compact
+  },
+  searchIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  cartIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    position: 'relative', // Untuk badge positioning
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  cartBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 6,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    padding: 8,
+  },
+  searchInputContainer: {
+    flex: 1,
+  },
+  searchInput: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+});
+
+--- FILE: ./components/AuthGuard.tsx ---
+
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation, useNavigationState } from '@react-navigation/native';
+import { RootStackParamList } from '../routes/RootNavigator';
+
+// Definisikan tipe untuk route parameters
+interface MainAppParams {
+  userToken?: string;
+  userID?: string;
+}
+
+interface AuthGuardProps {
+  children: React.ReactNode;
+}
+
+export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
+  const navigation = useNavigation();
+  const routes = useNavigationState(state => state.routes);
+  
+  // SOLUSI 1: Type assertion yang aman
+  const rootRoute = routes.find(route => route.name === 'MainApp');
+  const params = rootRoute?.params as MainAppParams | undefined;
+  const isAuthenticated = params?.userToken !== undefined;
+
+  // SOLUSI 2: Alternatif dengan type guard
+  // const isAuthenticated = (() => {
+  //   const rootRoute = routes.find(route => route.name === 'MainApp');
+  //   if (rootRoute?.params && typeof rootRoute.params === 'object' && 'userToken' in rootRoute.params) {
+  //     return (rootRoute.params as MainAppParams).userToken !== undefined;
+  //   }
+  //   return false;
+  // })();
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.authContainer}>
+        <Text style={styles.authTitle}>⚠️ Akses Terbatas</Text>
+        <Text style={styles.authMessage}>
+          Harap login untuk mengakses fitur ini
+        </Text>
+        <TouchableOpacity 
+          style={styles.loginButton}
+          onPress={() => navigation.navigate('Login' as never)}
+        >
+          <Text style={styles.loginButtonText}>Login Sekarang</Text>
+        </TouchableOpacity>
+        
+        {/* Debug info untuk development */}
+        <View style={styles.debugInfo}>
+          <Text style={styles.debugText}>
+            Debug: {params ? `Token: ${params.userToken || 'null'}` : 'No params'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+const styles = StyleSheet.create({
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  authTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  authMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  loginButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  debugInfo: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#e9ecef',
+    borderRadius: 6,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+});
+
+--- FILE: ./types/index.ts ---
+
+export interface Product {
+    id: string;
+    name: string;
+    price: number;
+    image: any;
+    description: string;
+    specifications?: string[];
+    category?: string;
+}
+
+export interface ProductFormData {
+    name: string;
+    price: string;
+    image: any;
+    description: string;
+    specifications?: string[];
+    category?: string;
+}
+
+export interface EnvironmentInfo {
+    reactNativeVersion: string;
+    nodeVersion: string;
+    platform: string;
+    typescript: boolean
+}
+
+
+--- FILE: ./types/navigation.ts ---
+
+import { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
+
+// Tipe untuk Drawer Navigator
+export type DrawerParamList = {
+  MainApp: undefined;
+  Profile: { userID?: string };
+  Product: undefined;
+  Dashboard: undefined;
+  Settings: undefined;
+};
+
+// Tipe untuk Bottom Tabs Navigator
+export type BottomTabParamList = {
+  HomeStack: undefined;
+  Dashboard: undefined;
+  Product: undefined;
+  Profile: undefined;
+};
+
+// Tipe untuk Home Stack Navigator
+export type HomeStackParamList = {
+  HomeTabs: { welcomeMessage?: string };
+  ProductDetail: { productId: string };
+  Checkout: { productId: string };
+};
+
+// Tipe untuk Root Stack Navigator - PERBAIKAN: Semua screen harus didefinisikan
+export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  MainApp: { 
+    userToken?: string;
+    userID?: string;
+    screen?: keyof RootStackParamList;
+    params?: any;
+  };
+  ProductDetail: { productId: string };
+  Checkout: { productId: string };
+  Cart: undefined;
+  AnalyticsHistory: undefined;
+};
+
+// Tipe untuk route parameters
+export interface MainAppParams {
+  userToken?: string;
+  userID?: string;
+  screen?: keyof RootStackParamList;
+  params?: any;
+}
+
+export interface ProfileParams {
+  userID?: string;
+}
+
+// Route props types untuk useRoute hook
+export type ProfileScreenRouteProp = RouteProp<DrawerParamList, 'Profile'>;
+export type MainAppScreenRouteProp = RouteProp<RootStackParamList, 'MainApp'>;
+export type ProductDetailScreenRouteProp = RouteProp<RootStackParamList, 'ProductDetail'>;
+
+// Navigation prop types
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+export type ProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+export type ProductDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+export type RootStackNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Extend Native Stack Navigation Prop
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
+
+--- FILE: ./data/initialProducts.ts ---
+
+// FILE: ./data/initialProducts.ts
+import { Product } from "../types";
+
+export const initialProducts: Product[] = [
+  {
+    id: "1",
+    name: "Fjallraven - Foldsack No. 1 Backpack, Fits 15 Laptops",
+    price: 500000,
+    image: { uri: 'https://fakestoreapi.com/img/81fPKd-2AYL._AC_SL1500_t.png' },
+    description: "Your perfect pack for everyday use and walks in the forest. Stash your laptop (up to 15 inches) in the padded sleeve, your everyday",
+    category: "backpack",
+    specifications: [
+      "Material: Polyester",
+      "Capacity: 15 Laptops", 
+      "Compartments: Multiple pockets",
+      "Straps: Padded shoulder straps",
+      "Water resistant"
+    ]
+  },
+  {
+    id: "2",
+    name: "Mens Casual Premium Slim Fit T-Shirts",
+    price: 250000,
+    image: { uri: 'https://fakestoreapi.com/img/71-3HjGNDUL._AC_SY879._SX._UX._SY._UY_t.png' },
+    description: "Slim-fitting style, contrast raglan long sleeve, three-button henley placket, light weight & soft fabric for breathable and comfortable wearing.",
+    category: "clothing",
+    specifications: [
+      "Material: 100% Cotton",
+      "Fit: Slim Fit",
+      "Style: Casual",
+      "Care: Machine wash",
+      "Sizes: S, M, L, XL"
+    ]
+  },
+  {
+    id: "3",
+    name: "Mens Cotton Jacket",
+    price: 750000,
+    image: { uri: 'https://fakestoreapi.com/img/71li-ujtlUL._AC_UX679_t.png' },
+    description: "Great outerwear jackets for Spring/Autumn/Winter, suitable for many occasions, such as working, hiking, camping, mountain/rock climbing, cycling, traveling or other outdoors.",
+    category: "clothing",
+    specifications: [
+      "Material: 100% Cotton",
+      "Closure: Zipper",
+      "Pockets: 2 side pockets",
+      "Season: All seasons",
+      "Style: Casual"
+    ]
+  },
+  {
+    id: "4",
+    name: "Mens Casual Slim Fit",
+    price: 350000,
+    image: { uri: 'https://fakestoreapi.com/img/71YXzeOuslL._AC_UY879_t.png' },
+    description: "The color could be slightly different between on the screen and in practice. / Please note that body builds vary by person, therefore, detailed size information should be reviewed below on the product description.",
+    category: "clothing",
+    specifications: [
+      "Material: Cotton Polyester",
+      "Fit: Slim Fit", 
+      "Neck: Round neck",
+      "Sleeve: Long sleeve",
+      "Pattern: Solid"
+    ]
+  },
+  {
+    id: "5",
+    name: "John Hardy Women's Legends Naga Gold & Silver Dragon Station Chain Bracelet",
+    price: 2500000,
+    image: { uri: 'https://fakestoreapi.com/img/71pWzhdJNwL._AC_UL640_QL65_ML3_t.png' },
+    description: "From our Legends Collection, the Naga was inspired by the mythical water dragon that protects the ocean's pearl. Wear facing inward to be bestowed with love and abundance, or outward for protection.",
+    category: "jewelry",
+    specifications: [
+      "Material: Gold & Silver",
+      "Closure: Station chain",
+      "Style: Bracelet",
+      "Gender: Women's",
+      "Collection: Legends"
+    ]
+  },
+  {
+    id: "6",
+    name: "Solid Gold Petite Micropave",
+    price: 3500000,
+    image: { uri: 'https://fakestoreapi.com/img/61sbMiUnoGL._AC_UL640_QL65_ML3_t.png' },
+    description: "Satisfaction Guaranteed. Return or exchange any order within 30 days.Designed and sold by Hafeez Center in the United States.",
+    category: "jewelry",
+    specifications: [
+      "Material: Solid Gold",
+      "Style: Micropave",
+      "Stone: Diamond",
+      "Setting: Prong setting",
+      "Guarantee: 30 days return"
+    ]
+  },
+  {
+    id: "7",
+    name: "White Gold Plated Princess",
+    price: 1800000,
+    image: { uri: 'https://fakestoreapi.com/img/71YAIFU48IL._AC_UL640_QL65_ML3_t.png' },
+    description: "Classic Created Wedding Engagement Solitaire Diamond Promise Ring for Her. Gifts to spoil your love more for Engagement, Wedding, Anniversary, Valentine's Day...",
+    category: "jewelry",
+    specifications: [
+      "Material: White Gold Plated",
+      "Style: Princess cut",
+      "Stone: Diamond",
+      "Occasion: Engagement, Wedding",
+      "Type: Promise ring"
+    ]
+  },
+  {
+    id: "8",
+    name: "Pierced Owl Rose Gold Plated Stainless Steel Double",
+    price: 850000,
+    image: { uri: 'https://fakestoreapi.com/img/51UDEzMJVpL._AC_UL640_QL65_ML3_t.png' },
+    description: "Rose Gold Plated Double Flared Tunnel Plug Earrings. Made of 316L Stainless Steel",
+    category: "jewelry",
+    specifications: [
+      "Material: Stainless Steel",
+      "Plating: Rose Gold",
+      "Style: Double flared",
+      "Type: Tunnel plug",
+      "Gauge: 14G"
+    ]
+  },
+  {
+    id: "9",
+    name: "WD 2TB Elements Portable External Hard Drive - USB 3.0",
+    price: 1200000,
+    image: { uri: 'https://fakestoreapi.com/img/61IBBVJvSDL._AC_SY879_t.png' },
+    description: "USB 3.0 and USB 2.0 Compatibility Fast data transfers Improve PC Performance High Capacity; Compatibility Formatted NTFS for Windows 10, Windows 8.1, Windows 7; Reformatting may be required for other operating systems",
+    category: "electronics",
+    specifications: [
+      "Capacity: 2TB",
+      "Interface: USB 3.0",
+      "Compatibility: USB 2.0",
+      "Type: Portable HDD",
+      "Formatted: NTFS"
+    ]
+  },
+  {
+    id: "10",
+    name: "SanDisk SSD PLUS 1TB Internal SSD - SATA III 6 Gb/s",
+    price: 1500000,
+    image: { uri: 'https://fakestoreapi.com/img/61U7T1koQqL._AC_SX679_t.png' },
+    description: "Easy upgrade for faster boot up, shutdown, application load and response (As compared to 5400 RPM SATA 2.5” hard drive; Based on published specifications and internal benchmarking tests using PCMark vantage scores) Boosts burst write performance, making it ideal for typical PC workloads The perfect balance of performance and reliability Read/write speeds of up to 535MB/s/450MB/s (Based on internal testing; Performance may vary depending upon drive capacity, host device, OS and application.)",
+    category: "electronics",
+    specifications: [
+      "Capacity: 1TB",
+      "Type: Internal SSD", 
+      "Interface: SATA III 6Gb/s",
+      "Speed: 535MB/s read, 450MB/s write",
+      "Form Factor: 2.5 inch"
+    ]
+  },
+  {
+    id: "11",
+    name: "Silicon Power 256GB SSD 3D NAND A55 SLC Cache Performance Boost SATA III 2.5",
+    price: 800000,
+    image: { uri: 'https://fakestoreapi.com/img/71kWymZ+c+L._AC_SX679_t.png' },
+    description: "3D NAND flash are applied to deliver high transfer speeds Remarkable transfer speeds that enable faster bootup and improved overall system performance. The advanced SLC Cache Technology allows performance boost and longer lifespan 7mm slim design suitable for Ultrabooks and Ultra-slim notebooks. Supports TRIM command, Garbage Collection technology, RAID, and ECC (Error Checking & Correction) to provide the optimized performance and enhanced reliability.",
+    category: "electronics",
+    specifications: [
+      "Capacity: 256GB",
+      "NAND: 3D NAND",
+      "Cache: SLC Cache",
+      "Interface: SATA III",
+      "Form Factor: 2.5 inch"
+    ]
+  },
+  {
+    id: "12",
+    name: "WD 4TB Gaming Drive Works with Playstation 4 Portable External Hard Drive",
+    price: 1800000,
+    image: { uri: 'https://fakestoreapi.com/img/61mtL65D4cL._AC_SX679_t.png' },
+    description: "Expand your PS4 gaming experience, Play anywhere Fast and easy, setup Sleek design with high capacity, 3-year manufacturer's limited warranty",
+    category: "electronics",
+    specifications: [
+      "Capacity: 4TB",
+      "Compatibility: PS4",
+      "Type: Portable HDD",
+      "Warranty: 3 years",
+      "Design: Sleek gaming design"
+    ]
+  }
+];
+
+--- FILE: ./pages/Auth/RegisterScreen.tsx ---
+
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { RootStackParamList } from '../../types/navigation';
+
+type RegisterScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
+
+export const RegisterScreen: React.FC = () => {
+  const navigation = useNavigation<RegisterScreenNavigationProp>();
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const handleRegister = () => {
+    const { fullName, email, phone, password, confirmPassword } = formData;
+    
+    if (!fullName || !email || !phone || !password || !confirmPassword) {
+      Alert.alert('Error', 'Harap isi semua field');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Password dan konfirmasi password tidak cocok');
+      return;
+    }
+
+    // Simulate registration success
+    console.log('Registration attempted:', formData);
+    // Navigate back to login
+    navigation.navigate('Login');
+  };
+
+  const handleLogin = () => {
+    navigation.navigate('Login');
+  };
+
+  const updateFormData = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <FontAwesome6 name="user-plus" size={60} color="#FF3B30" iconStyle='solid'/>
+        <Text style={styles.title}>Daftar Akun Baru</Text>
+        <Text style={styles.subtitle}>Buat akun untuk mulai berbelanja</Text>
+      </View>
+
+      {/* Form */}
+      <View style={styles.form}>
+        {/* Full Name Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nama Lengkap</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="user" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan nama lengkap"
+              value={formData.fullName}
+              onChangeText={(text) => updateFormData('fullName', text)}
+            />
+          </View>
+        </View>
+
+        {/* Email Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="envelope" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan email Anda"
+              value={formData.email}
+              onChangeText={(text) => updateFormData('email', text)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+        </View>
+
+        {/* Phone Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nomor Telepon</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="phone" size={20} color="#666" style={styles.inputIcon} iconStyle='solid' />
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan nomor telepon"
+              value={formData.phone}
+              onChangeText={(text) => updateFormData('phone', text)}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </View>
+
+        {/* Password Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="lock" size={20} color="#666" style={styles.inputIcon} iconStyle='solid'/>
+            <TextInput
+              style={styles.input}
+              placeholder="Buat password"
+              value={formData.password}
+              onChangeText={(text) => updateFormData('password', text)}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity 
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <FontAwesome6 
+                name={showPassword ? 'eye-slash' : 'eye'} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Confirm Password Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Konfirmasi Password</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="lock" size={20} color="#666" style={styles.inputIcon} iconStyle='solid'/>
+            <TextInput
+              style={styles.input}
+              placeholder="Konfirmasi password Anda"
+              value={formData.confirmPassword}
+              onChangeText={(text) => updateFormData('confirmPassword', text)}
+              secureTextEntry={!showConfirmPassword}
+            />
+            <TouchableOpacity 
+              style={styles.eyeIcon}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <FontAwesome6 
+                name={showConfirmPassword ? 'eye-slash' : 'eye'} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Register Button */}
+        <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+          <Text style={styles.registerButtonText}>Daftar</Text>
+        </TouchableOpacity>
+
+        {/* Login Link */}
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>Sudah punya akun? </Text>
+          <TouchableOpacity onPress={handleLogin}>
+            <Text style={styles.loginLink}>Masuk Sekarang</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: '#fff',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+    marginTop: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+  },
+  inputIcon: {
+    padding: 16,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingRight: 16,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 16,
+  },
+  registerButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 8,
+  },
+  registerButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  loginLink: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
+
+
+--- FILE: ./pages/Auth/LoginScreen.tsx ---
+
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { RootStackParamList } from '../../types/navigation';
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+
+export const LoginScreen: React.FC = () => {
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Harap isi semua field');
+      return;
+    }
+    
+    // Simulate login success - Set userID parameter di parent navigator
+    console.log('Login attempted:', { email, password });
+    
+    // Navigate ke MainApp dan set parameter userID - PERBAIKAN TIPE
+    navigation.navigate('MainApp', {
+      screen: 'Profile',
+      params: { userID: 'U123' }
+    } as any); // Temporary fix dengan any, nanti kita perbaiki dengan tipe yang lebih baik
+  };
+
+  const handleRegister = () => {
+    navigation.navigate('Register');
+  };
+
+  // Tambahkan tombol demo untuk langsung login dengan userID
+  const handleQuickLogin = () => {
+    navigation.navigate('MainApp', {
+      screen: 'Profile',
+      params: { userID: 'U123' }
+    } as any);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <FontAwesome6 name="shop" size={80} color="#FF3B30" iconStyle='solid'/>
+        <Text style={styles.title}>Rits Marketplace</Text>
+        <Text style={styles.subtitle}>Masuk ke akun Anda</Text>
+      </View>
+
+      {/* Form */}
+      <View style={styles.form}>
+        {/* Email Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="envelope" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan email Anda"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+        </View>
+
+        {/* Password Input */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputContainer}>
+            <FontAwesome6 name="lock" size={20} color="#666" style={styles.inputIcon} iconStyle='solid'/>
+            <TextInput
+              style={styles.input}
+              placeholder="Masukkan password Anda"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity 
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <FontAwesome6 
+                name={showPassword ? 'eye-slash' : 'eye'} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Forgot Password */}
+        <TouchableOpacity style={styles.forgotPassword}>
+          <Text style={styles.forgotPasswordText}>Lupa Password?</Text>
+        </TouchableOpacity>
+
+        {/* Login Button */}
+        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+          <Text style={styles.loginButtonText}>Masuk</Text>
+        </TouchableOpacity>
+
+        {/* Quick Login Demo Button */}
+        <TouchableOpacity style={styles.quickLoginButton} onPress={handleQuickLogin}>
+          <Text style={styles.quickLoginButtonText}>Quick Login (Demo UserID)</Text>
+        </TouchableOpacity>
+
+        {/* Divider */}
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>atau</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Social Login */}
+        <View style={styles.socialButtons}>
+          <TouchableOpacity style={styles.socialButton}>
+            <FontAwesome6 name="google" size={20} color="#DB4437" iconStyle='brand'/>
+            <Text style={styles.socialButtonText}>Google</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.socialButton}>
+            <FontAwesome6 name="facebook" size={20} color="#4267B2" iconStyle='brand'/>
+            <Text style={styles.socialButtonText}>Facebook</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Register Link */}
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerText}>Belum punya akun? </Text>
+          <TouchableOpacity onPress={handleRegister}>
+            <Text style={styles.registerLink}>Daftar Sekarang</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: '#fff',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+    marginTop: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+  },
+  inputIcon: {
+    padding: 16,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingRight: 16,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 16,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  quickLoginButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  quickLoginButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#666',
+    fontSize: 14,
+  },
+  socialButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    marginHorizontal: 6,
+  },
+  socialButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  registerText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  registerLink: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./pages/Dashboard/Dashboard.tsx ---
+
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+
+
+export const Dashboard: React.FC = () => {
+  const stats = [
+    { icon: 'eye', label: 'Dilihat', value: '1.2K', color: '#007AFF' },
+    { icon: 'cart-shopping', label: 'Terjual', value: '156', color: '#34C759' },
+    { icon: 'heart', label: 'Disukai', value: '89', color: '#FF3B30' },
+    { icon: 'star', label: 'Rating', value: '4.8', color: '#FFCC00' },
+  ];
+
+  const quickActions = [
+    { icon: 'plus', label: 'Tambah Produk', color: '#FF3B30' },
+    { icon: 'chart-column', label: 'Analitik', color: '#007AFF' },
+    { icon: 'tags', label: 'Promosi', color: '#34C759' },
+    { icon: 'gear', label: 'Pengaturan', color: '#8E8E93' },
+  ];
+
+  return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Dashboard</Text>
+        <Text style={styles.subtitle}>Ringkasan performa toko Anda</Text>
+      </View>
+
+      {/* Stats Grid */}
+      <View style={styles.statsGrid}>
+        {stats.map((stat, index) => (
+          <View key={index} style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: `${stat.color}20` }]}>
+              <FontAwesome6 name={stat.icon as any} size={24} color={stat.color}/>
+            </View>
+            <Text style={styles.statValue}>{stat.value}</Text>
+            <Text style={styles.statLabel}>{stat.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Aksi Cepat</Text>
+        <View style={styles.actionsGrid}>
+          {quickActions.map((action, index) => (
+            <TouchableOpacity key={index} style={styles.actionCard}>
+              <View style={[styles.actionIcon, { backgroundColor: `${action.color}20` }]}>
+                <FontAwesome6 name={action.icon as any} size={24} color={action.color} />
+              </View>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Recent Activity */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Aktivitas Terbaru</Text>
+        <View style={styles.activityList}>
+          {[1, 2, 3].map((item, index) => (
+            <View key={index} style={styles.activityItem}>
+              <View style={styles.activityIcon}>
+                <FontAwesome6 name="circle-check" size={20} color="#34C759" />
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>Pesanan #00{item} Selesai</Text>
+                <Text style={styles.activityTime}>2 jam yang lalu</Text>
+              </View>
+              <Text style={styles.activityAmount}>+Rp 250.000</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Performance Chart Placeholder */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Performa Penjualan</Text>
+        <View style={styles.chartPlaceholder}>
+          <FontAwesome6 name="chart-line" size={40} color="#ccc" iconStyle='solid'/>
+          <Text style={styles.chartText}>Grafik performa akan ditampilkan di sini</Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  header: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  section: {
+    backgroundColor: '#fff',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  actionCard: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+  },
+  actionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  activityList: {
+    gap: 12,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  activityIcon: {
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  activityAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#34C759',
+  },
+  chartPlaceholder: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    borderStyle: 'dashed',
+  },
+  chartText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
+
+--- FILE: ./pages/Dashboard/Product.tsx ---
+
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+
+export const Product: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive'>('all');
+
+  const products = [
+    {
+      id: '1',
+      name: 'Laptop Gaming',
+      price: 15000000,
+      status: 'active',
+      stock: 15,
+      sales: 45,
+    },
+    {
+      id: '2',
+      name: 'Mouse Gaming',
+      price: 500000,
+      status: 'active',
+      stock: 32,
+      sales: 128,
+    },
+    {
+      id: '3',
+      name: 'Keyboard Mechanical',
+      price: 800000,
+      status: 'inactive',
+      stock: 0,
+      sales: 76,
+    },
+    {
+      id: '4',
+      name: 'Headset Wireless',
+      price: 750000,
+      status: 'active',
+      stock: 8,
+      sales: 92,
+    },
+  ];
+
+  const filteredProducts = products.filter(product => {
+    if (activeTab === 'all') return true;
+    return product.status === activeTab;
+  });
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Kelola Produk</Text>
+        <TouchableOpacity style={styles.addButton}>
+          <FontAwesome6 name="plus" size={16} color="#fff" iconStyle='solid'/>
+          <Text style={styles.addButtonText}>Tambah Produk</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <FontAwesome6 name="magnifying-glass" size={20} color="#666" iconStyle='solid'/>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cari produk..."
+            placeholderTextColor="#999"
+          />
+        </View>
+        <TouchableOpacity style={styles.filterButton}>
+          <FontAwesome6 name="sliders" size={20} color="#333" iconStyle='solid' />
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+            Semua
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'active' && styles.activeTab]}
+          onPress={() => setActiveTab('active')}
+        >
+          <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
+            Aktif
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'inactive' && styles.activeTab]}
+          onPress={() => setActiveTab('inactive')}
+        >
+          <Text style={[styles.tabText, activeTab === 'inactive' && styles.activeTabText]}>
+            Nonaktif
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Products List */}
+      <ScrollView style={styles.productsList} showsVerticalScrollIndicator={false}>
+        {filteredProducts.map((product) => (
+          <View key={product.id} style={styles.productCard}>
+            <View style={styles.productInfo}>
+              <View style={styles.productHeader}>
+                <Text style={styles.productName}>{product.name}</Text>
+                <View style={[
+                  styles.statusBadge,
+                  product.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+                ]}>
+                  <Text style={styles.statusText}>
+                    {product.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                  </Text>
+                </View>
+              </View>
+              
+              <Text style={styles.productPrice}>
+                Rp {product.price.toLocaleString('id-ID')}
+              </Text>
+              
+              <View style={styles.productStats}>
+                <View style={styles.stat}>
+                  <FontAwesome6 name="box" size={12} color="#666" iconStyle='solid'/>
+                  <Text style={styles.statText}>Stok: {product.stock}</Text>
+                </View>
+                <View style={styles.stat}>
+                  <FontAwesome6 name="chart-line" size={12} color="#666" iconStyle='solid'/>
+                  <Text style={styles.statText}>Terjual: {product.sales}</Text>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.productActions}>
+              <TouchableOpacity style={styles.actionButton}>
+                <FontAwesome6 name="pen-to-square" size={16} color="#007AFF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton}>
+                <FontAwesome6 name="trash" size={16} color="#FF3B30" iconStyle='solid'/>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* Empty State */}
+      {filteredProducts.length === 0 && (
+        <View style={styles.emptyState}>
+          <FontAwesome6 name="box-open" size={60} color="#ccc" iconStyle='solid'/>
+          <Text style={styles.emptyStateTitle}>Tidak ada produk</Text>
+          <Text style={styles.emptyStateText}>
+            {activeTab === 'all' 
+              ? 'Belum ada produk yang ditambahkan' 
+              : `Tidak ada produk ${activeTab === 'active' ? 'aktif' : 'nonaktif'}`
+            }
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    gap: 12,
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
+  filterButton: {
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#FF3B30',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#FF3B30',
+  },
+  productsList: {
+    flex: 1,
+    padding: 16,
+  },
+  productCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activeBadge: {
+    backgroundColor: '#34C75920',
+  },
+  inactiveBadge: {
+    backgroundColor: '#FF3B3020',
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  productPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF3B30',
+    marginBottom: 8,
+  },
+  productStats: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  stat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  productActions: {
+    justifyContent: 'space-between',
+    paddingLeft: 12,
+  },
+  actionButton: {
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
+
+
+--- FILE: ./pages/Dashboard/Setting.tsx ---
+
+import React from "react";
+import { View, Text, Button, StyleSheet } from "react-native";
+import { useNavigation, DrawerActions } from "@react-navigation/native";
+
+type SettingsProps = {
+  drawerLocked: boolean;
+  setDrawerLocked: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+export const Settings: React.FC<SettingsProps> = ({ drawerLocked, setDrawerLocked }) => {
+  const navigation = useNavigation<any>();
+
+  const goToHomeAndCloseDrawer = () => {
+    navigation.navigate("Home");
+    navigation.dispatch(DrawerActions.closeDrawer());
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Settings</Text>
+
+      <View style={styles.row}>
+        <Text>Fitur Pengaturan</Text>
+        <Text style={styles.comingSoon}>Coming Soon</Text>
+      </View>
+
+      <Button title="Ke Halaman Home" onPress={goToHomeAndCloseDrawer} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 20, fontWeight: "bold", marginBottom: 20 },
+  row: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  comingSoon: {
+    color: '#666',
+    fontStyle: 'italic',
+  }
+});
+
+--- FILE: ./pages/Dashboard/Home.tsx ---
+
+// Dalam Home.tsx, tambahkan navigation ke cart dan state untuk cart items
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ProductList } from '../../components/ProductList';
+import { Product, ProductFormData } from '../../types';
+import { initialProducts } from '../../data/initialProducts';
+import { AddProductModal } from '../../components/AddProductModal';
+import { SearchHeader } from '../../components/SearchHeader';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { useCart } from '../../context/CartContext';
+
+// Define types untuk navigation
+type DrawerParamList = {
+  Home: undefined;
+  Profile: undefined;
+  Product: undefined;
+  Dashboard: undefined;
+  Settings: undefined;
+};
+
+type HomeScreenNavigationProp = DrawerNavigationProp<DrawerParamList, 'Home'>;
+
+const Tab = createMaterialTopTabNavigator();
+
+export const Home: React.FC = () => {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { getCartItemCount } = useCart();
+
+  
+  // State untuk cart items (simulasi)
+  const [cartItemCount, setCartItemCount] = useState(3); // Default 3 items
+  
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+
+  const generateId = () => Date.now().toString() + Math.random().toString(36).substring(2, 9);
+
+  const handleAddProduct = async (formData: ProductFormData) => {
+    const newProduct: Product = {
+      id: generateId(),
+      name: formData.name,
+      price: Number(formData.price),
+      image: formData.image,
+      description: formData.description,
+    };
+    setProducts(prev => [newProduct, ...prev]);
+  };
+
+  const handleUpdateProduct = async (productId: string, formData: ProductFormData) => {
+    setProducts(prev =>
+      prev.map(product =>
+        product.id === productId
+          ? { ...product, ...formData, price: Number(formData.price) }
+          : product
+      )
+    );
+    setEditingProduct(null);
+  };
+
+  // Handler untuk tombol cart
+  const handleCartPress = () => {
+    navigation.navigate('Cart' as any);
+  };
+
+  // Handler untuk add to cart dari product list (optional)
+  const handleAddToCart = (product: Product) => {
+    setCartItemCount(prev => prev + 1);
+    // Bisa tambahkan Alert atau feedback lainnya
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Cross-level action: Toggle drawer dari child component
+  const toggleDrawer = () => {
+    navigation.toggleDrawer();
+  };
+
+  // Komponen untuk Tab Populer dengan dynamic header
+ const PopularTabScreen = () => {
+  const navigation = useNavigation();
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Tab Populer aktif - Mengubah header');
+      return () => {
+        console.log('Tab Populer tidak aktif');
+      };
+    }, [])
+  );
+
+  const handleProductPress = (product: Product) => {
+    // Navigasi ke ProductDetail di Stack Navigator parent
+    navigation.navigate('ProductDetail', { 
+      productId: product.id 
+    });
+  };
+
+  return (
+    <View style={styles.tabContainer}>
+      <ProductList
+        products={filteredProducts}
+        onEditProduct={setEditingProduct}
+        onDeleteProduct={(id) => setProducts(products.filter(p => p.id !== id))}
+        searchQuery={searchQuery}
+        onProductPress={handleProductPress} // Gunakan handler baru
+        onAddToCart={handleAddToCart}
+      />
+    </View>
+  );
+};
+
+  // Komponen untuk tab lainnya
+  const ProductTabScreen = ({ category }: { category?: string }) => {
+    useFocusEffect(
+      useCallback(() => {
+        console.log(`${category || 'Default'} tab aktif`);
+        
+        // Reset header untuk tab selain Populer
+        if (category !== 'Populer') {
+          navigation.setOptions({
+            title: 'Rits Marketplace',
+            headerRight: undefined,
+          });
+        }
+
+        return () => {
+          console.log(`${category || 'Default'} tab tidak aktif`);
+        };
+      }, [category, navigation])
+    );
+
+    return (
+      <View style={styles.tabContainer}>
+        <ProductList
+          products={filteredProducts}
+          onEditProduct={setEditingProduct}
+          onDeleteProduct={(id) => setProducts(products.filter(p => p.id !== id))}
+          searchQuery={searchQuery}
+          onProductPress={(product) => console.log('Product pressed:', product.name)}
+          onAddToCart={handleAddToCart} // Optional: tambahkan handler untuk add to cart
+        />
+      </View>
+    );
+  };
+
+  const categories = [
+    'Populer',
+    'Terbaru',
+    'Diskon',
+    'Pakaian',
+    'Makanan',
+    'Otomotif',
+    'Hiburan',
+    'Perlengkapan Bayi'
+  ];
+
+  return (
+    <View style={styles.container}>
+      <SearchHeader
+        searchVisible={searchVisible}
+        searchQuery={searchQuery}
+        onSearchToggle={() => {
+          setSearchVisible(!searchVisible);
+          if (searchVisible) setSearchQuery('');
+        }}
+        onSearchChange={setSearchQuery}
+        onAddProduct={() => {
+          setEditingProduct(null);
+          setModalVisible(true);
+        }}
+        onCartPress={handleCartPress} // Tambahkan handler untuk cart
+        cartItemCount={getCartItemCount()} // Kirim jumlah item cart
+      />
+
+      <View style={styles.content}>
+        <Tab.Navigator
+          screenOptions={{
+            lazy: true,
+            lazyPreloadDistance: 1,
+            tabBarIndicatorStyle: { backgroundColor: '#FF3B30' },
+            tabBarLabelStyle: { 
+              textTransform: 'none', 
+              fontSize: 14,
+              fontWeight: '600'
+            },
+            swipeEnabled: true,
+            tabBarScrollEnabled: true,
+            tabBarItemStyle: { width: 'auto', minWidth: 100 },
+            tabBarActiveTintColor: '#FF3B30',
+            tabBarInactiveTintColor: '#6c757d',
+            tabBarStyle: {
+              backgroundColor: '#fff',
+              elevation: 0,
+              shadowOpacity: 0,
+              borderBottomWidth: 1,
+              borderBottomColor: '#e8e8e8',
+            },
+          }}
+        >
+          <Tab.Screen
+            name="Populer"
+            component={PopularTabScreen}
+          />
+          {categories.slice(1).map(cat => (
+            <Tab.Screen
+              key={cat}
+              name={cat}
+              children={() => <ProductTabScreen category={cat} />}
+            />
+          ))}
+        </Tab.Navigator>
+      </View>
+
+      <AddProductModal
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingProduct(null);
+        }}
+        onAddProduct={handleAddProduct}
+        editingProduct={editingProduct}
+        onUpdateProduct={handleUpdateProduct}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f8f9fa' 
+  },
+  content: { 
+    flex: 1 
+  },
+  tabContainer: { 
+    flex: 1 
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  toggleDrawerButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  toggleDrawerButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  crossActionContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    margin: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  crossActionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 12,
+  },
+  crossActionButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  crossActionButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  crossActionDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+});
+
+export default Home;
+
+--- FILE: ./pages/Dashboard/Profile.tsx ---
+
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { useNavigation, useRoute, useNavigationState } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList, MainAppParams, ProfileParams } from '../../types/navigation';
+import { AuthGuard } from '../../components/AuthGuard';
+
+// ✅ SOLUSI: Hapus props yang tidak diperlukan dari Bottom Tab Navigator
+// type ProfileProps = {
+//   drawerLocked: boolean;
+//   setDrawerLocked: React.Dispatch<React.SetStateAction<boolean>>;
+// }
+
+// Gunakan tanpa props atau dengan props default dari navigator
+export const Profile: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  
+  // SOLUSI: Gunakan useNavigationState untuk mendapatkan state drawer
+  const routes = useNavigationState(state => state.routes);
+  
+  // Type-safe way to get userToken
+  const isAuthenticated = (() => {
+    const rootRoute = routes.find(route => route.name === 'MainApp');
+    if (rootRoute?.params) {
+      const params = rootRoute.params as MainAppParams;
+      return params.userToken !== undefined;
+    }
+    return false;
+  })();
+  
+  const [userID, setUserID] = useState<string | null>(null);
+
+  // Ambil parameter userID dari route parameters
+  useEffect(() => {
+    const params = route.params as ProfileParams;
+    if (params?.userID) {
+      setUserID(params.userID);
+      console.log('UserID received in Profile:', params.userID);
+    }
+  }, [route.params]);
+
+  const menuItems = [
+    {
+      icon: 'user-pen',
+      title: 'Edit Profil',
+      description: 'Ubah data pribadi Anda',
+      color: '#007AFF',
+    },
+    {
+      icon: 'location-dot',
+      title: 'Alamat Saya',
+      description: 'Kelola alamat pengiriman',
+      color: '#34C759',
+    },
+    {
+      icon: 'credit-card',
+      title: 'Pembayaran',
+      description: 'Metode pembayaran',
+      color: '#FF9500',
+    },
+    {
+      icon: 'heart',
+      title: 'Wishlist',
+      description: 'Produk yang disukai',
+      color: '#FF3B30',
+    },
+    {
+      icon: 'file-lines',
+      title: 'Pesanan Saya',
+      description: 'Riwayat pembelian',
+      color: '#5856D6',
+    },
+    {
+      icon: 'bell',
+      title: 'Notifikasi',
+      description: 'Pengaturan notifikasi',
+      color: '#FF2D55',
+    },
+    {
+      icon: 'shield-halved',
+      title: 'Privasi & Keamanan',
+      description: 'Pengaturan privasi',
+      color: '#32D74B',
+    },
+    {
+      icon: 'circle-question',
+      title: 'Bantuan & Dukungan',
+      description: 'Pusat bantuan',
+      color: '#0A84FF',
+    },
+  ];
+
+  // SOLUSI: Fungsi navigasi dengan type assertion
+  const navigateToHomeStack = () => {
+    const navigationAny = navigation as any;
+    navigationAny.navigate('MainApp', {
+      screen: 'HomeStack',
+      params: { welcomeMessage: 'Dari Profile!' }
+    });
+  };
+
+  const resetToRoot = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainApp' }],
+    });
+  };
+
+  // Fungsi untuk demo navigation state
+  const showNavigationState = () => {
+    const currentRoute = routes[routes.length - 1];
+    Alert.alert(
+      'Navigation State Info',
+      `Current Route: ${currentRoute.name}\nTotal Routes: ${routes.length}\nAuthenticated: ${isAuthenticated ? 'Yes' : 'No'}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  return (
+    <AuthGuard>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header Profile */}
+        <View style={styles.header}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={require('https://randomuser.me/api/portraits/lego/6.jpg')}
+              style={styles.avatar}
+            />
+
+            <TouchableOpacity style={styles.avatarBadge}>
+              <FontAwesome6 name="camera" size={14} color="#fff" iconStyle='solid'/>
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.userName}>Muhammad Harits</Text>
+          <Text style={styles.userEmail}>wert640559@gmail.com</Text>
+          
+          {/* Display UserID dari parameter */}
+          {userID && (
+            <View style={styles.userIdContainer}>
+              <Text style={styles.userIdLabel}>User ID:</Text>
+              <Text style={styles.userIdValue}>{userID}</Text>
+            </View>
+          )}
+
+          {/* Status Autentikasi */}
+          <View style={[
+            styles.authStatus, 
+            isAuthenticated ? styles.authStatusAuthenticated : styles.authStatusUnauthenticated
+          ]}>
+            <FontAwesome6 
+              name={isAuthenticated ? "circle-check" : "circle-exclamation"} 
+              size={14} 
+              color="#fff" 
+              iconStyle='solid'
+            />
+            <Text style={styles.authStatusText}>
+              {isAuthenticated ? 'Terverifikasi' : 'Belum Login'}
+            </Text>
+          </View>
+          
+          <TouchableOpacity style={styles.editProfileButton}>
+            <FontAwesome6 name="pen-to-square" size={16} color="#FF3B30" />
+            <Text style={styles.editProfileButtonText}>Edit Profil</Text>
+          </TouchableOpacity>
+
+          {/* Tombol untuk melihat navigation state */}
+          <TouchableOpacity 
+            style={styles.debugButton}
+            onPress={showNavigationState}
+          >
+            <FontAwesome6 name="bug" size={14} color="#666" iconStyle='solid'/>
+            <Text style={styles.debugButtonText}>Debug Navigation</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>128</Text>
+            <Text style={styles.statLabel}>Pesanan</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>87</Text>
+            <Text style={styles.statLabel}>Wishlist</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>999+</Text>
+            <Text style={styles.statLabel}>Voucher</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>5</Text>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+        </View>
+
+        {/* Menu Items */}
+        <View style={styles.menuContainer}>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.menuItem}
+              onPress={() => console.log(item.title)}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: `${item.color}20` }]}>
+                <FontAwesome6 name={item.icon as any} size={20} color={item.color} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuDescription}>{item.description}</Text>
+              </View>
+              <FontAwesome6 name="chevron-right" size={16} color="#ccc" iconStyle='solid'/>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Analytics History Button */}
+        <TouchableOpacity 
+          style={styles.analyticsButton}
+          onPress={() => navigation.navigate('AnalyticsHistory')}
+        >
+          <FontAwesome6 name="chart-line" size={20} color="#007AFF" iconStyle='solid'/>
+          <Text style={styles.analyticsButtonText}>Lihat History Analytics</Text>
+        </TouchableOpacity>
+
+        {/* Navigation Actions */}
+        <View style={styles.navigationActions}>
+          <Text style={styles.navigationActionsTitle}>Aksi Navigasi Lanjutan</Text>
+          
+          <TouchableOpacity 
+            style={styles.navActionButton}
+            onPress={navigateToHomeStack}
+          >
+            <FontAwesome6 name="house" size={16} color="#007AFF" iconStyle='solid'/>
+            <Text style={styles.navActionButtonText}>Ke Home Stack</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.navActionButton}
+            onPress={resetToRoot}
+          >
+            <FontAwesome6 name="rotate-left" size={16} color="#34C759" iconStyle='solid'/>
+            <Text style={styles.navActionButtonText}>Reset ke Root</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton}>
+          <FontAwesome6 name="right-from-bracket" size={20} color="#FF3B30" iconStyle='solid'/>
+          <Text style={styles.logoutButtonText}>Keluar</Text>
+        </TouchableOpacity>
+
+        {/* App Version */}
+        <Text style={styles.versionText}>Rits Marketplace v1.0.0</Text>
+        <Text style={styles.nestedInfo}>
+          🔗 Hierarki: Drawer → Bottom Tabs → Profile Screen
+        </Text>
+        <Text style={styles.typeInfo}>
+          ✅ Fixed: Profile component tanpa custom props
+        </Text>
+      </ScrollView>
+    </AuthGuard>
+  );
+};
+
+// Styles tetap sama seperti sebelumnya
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  header: {
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#FF3B30',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  userIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  userIdLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginRight: 6,
+  },
+  userIdValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  authStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  authStatusAuthenticated: {
+    backgroundColor: '#34C759',
+  },
+  authStatusUnauthenticated: {
+    backgroundColor: '#FF9500',
+  },
+  authStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B3020',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    gap: 8,
+    marginBottom: 12,
+  },
+  editProfileButtonText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  debugButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    gap: 6,
+  },
+  debugButtonText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingVertical: 20,
+    marginBottom: 8,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: '#e8e8e8',
+  },
+  menuContainer: {
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  menuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  menuContent: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  menuDescription: {
+    fontSize: 12,
+    color: '#666',
+  },
+  analyticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007AFF20',
+    paddingVertical: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  analyticsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  navigationActions: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  navigationActionsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  navActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  navActionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    marginBottom: 16,
+    gap: 8,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
+  },
+  nestedInfo: {
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 4,
+    paddingHorizontal: 16,
+  },
+  typeInfo: {
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#34C759',
+    fontStyle: 'italic',
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+});
+
+--- FILE: ./pages/AnalyticsHistoryScreen.tsx ---
+
+// FILE: ./pages/AnalyticsHistoryScreen.tsx
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { getAnalyticsHistory, clearAnalyticsHistory, addAnalyticsEvent } from '../routes/RootNavigator';
+
+export const AnalyticsHistoryScreen: React.FC = () => {
+  const [analyticsHistory, setAnalyticsHistory] = useState<string[]>([]);
+  const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    setAnalyticsHistory(getAnalyticsHistory());
+  }, [refresh]);
+
+  const handleClearHistory = () => {
+    clearAnalyticsHistory();
+    setRefresh(prev => prev + 1);
+    addAnalyticsEvent('Analytics history cleared by user');
+  };
+
+  const handleRefresh = () => {
+    setRefresh(prev => prev + 1);
+    addAnalyticsEvent('Analytics history manually refreshed');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Analytics History</Text>
+      <Text style={styles.subtitle}>Log navigasi pengguna - Real Time Tracking</Text>
+      
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleRefresh}>
+          <Text style={styles.actionButtonText}>🔄 Refresh</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionButton, styles.clearButton]} onPress={handleClearHistory}>
+          <Text style={styles.actionButtonText}>🗑️ Clear</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.historyContainer}>
+        {analyticsHistory.length === 0 ? (
+          <Text style={styles.emptyText}>Belum ada data analytics</Text>
+        ) : (
+          analyticsHistory.map((event, index) => (
+            <View key={index} style={styles.eventItem}>
+              <Text style={styles.eventText}>{event}</Text>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      <View style={styles.stats}>
+        <Text style={styles.statsText}>
+          Total Events: {analyticsHistory.length}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  actionButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  clearButton: {
+    backgroundColor: '#FF3B30',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  historyContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  eventItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  eventText: {
+    fontSize: 14,
+    color: '#333',
+    fontFamily: 'monospace',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  stats: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+});
+
+--- FILE: ./pages/CartScreen.tsx ---
+
+// FILE: ./pages/CartScreen.tsx
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Alert,
+  TextInput
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { useCart } from '../context/CartContext'; // Import useCart
+
+export const CartScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const { 
+    cartItems, 
+    updateQuantity, 
+    removeFromCart, 
+    clearCart,
+    getTotalPrice 
+  } = useCart();
+  
+  const [promoCode, setPromoCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+
+  // Apply promo code
+  const applyPromoCode = () => {
+    const promo = promoCode.trim().toUpperCase();
+    
+    if (!promo) {
+      Alert.alert('Error', 'Masukkan kode promo');
+      return;
+    }
+
+    // Simulasi cek promo code
+    const validPromoCodes: { [key: string]: number } = {
+      'DISKON10': 10,
+      'WELCOME15': 15,
+      'SPECIAL20': 20
+    };
+
+    if (validPromoCodes[promo]) {
+      setDiscount(validPromoCodes[promo]);
+      Alert.alert('Berhasil', `Promo ${promo} berhasil diterapkan!`);
+    } else {
+      setDiscount(0);
+      Alert.alert('Error', 'Kode promo tidak valid');
+    }
+  };
+
+  // Remove item dari cart
+  const removeItem = (productId: string) => {
+    Alert.alert(
+      'Hapus Item',
+      'Apakah Anda yakin ingin menghapus item ini dari keranjang?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        { 
+          text: 'Hapus', 
+          style: 'destructive',
+          onPress: () => removeFromCart(productId)
+        }
+      ]
+    );
+  };
+
+  // Calculate totals
+  const subtotal = getTotalPrice();
+  const discountAmount = (subtotal * discount) / 100;
+  const shippingCost = subtotal > 500000 ? 0 : 15000; // Free shipping above 500k
+  const total = subtotal - discountAmount + shippingCost;
+
+  // Checkout handler
+  // Dalam CartScreen.tsx, perbaiki handleCheckout:
+const handleCheckout = () => {
+  if (cartItems.length === 0) {
+    Alert.alert('Keranjang Kosong', 'Tambahkan produk ke keranjang terlebih dahulu');
+    return;
+  }
+
+  // Navigasi ke CheckoutScreen
+  navigation.navigate('Checkout' as any);
+};
+
+  // Navigate to product detail
+  const navigateToProduct = (productId: string) => {
+    navigation.navigate('ProductDetail', { productId });
+  };
+
+  // Empty cart state
+  if (cartItems.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <FontAwesome6 name="cart-shopping" size={80} color="#ccc" iconStyle='solid'/>
+        <Text style={styles.emptyTitle}>Keranjang Kosong</Text>
+        <Text style={styles.emptyText}>
+          Belum ada produk di keranjang belanja Anda
+        </Text>
+        <TouchableOpacity 
+          style={styles.shopButton}
+          onPress={() => navigation.navigate('Home' as any)}
+        >
+          <Text style={styles.shopButtonText}>Mulai Belanja</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <FontAwesome6 name="arrow-left" size={20} color="#333" iconStyle='solid'/>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Keranjang Belanja</Text>
+        <View style={styles.cartCount}>
+          <Text style={styles.cartCountText}>
+            {cartItems.reduce((total, item) => total + item.quantity, 0)}
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView style={styles.content}>
+        {/* Cart Items */}
+        <View style={styles.itemsSection}>
+          <Text style={styles.sectionTitle}>
+            Item Belanja ({cartItems.length} produk)
+          </Text>
+          
+          {cartItems.map((item) => (
+            <View key={item.product.id} style={styles.cartItem}>
+              {/* Product Image */}
+              <TouchableOpacity 
+                style={styles.imageContainer}
+                onPress={() => navigateToProduct(item.product.id)}
+              >
+                <Image 
+                  source={item.product.image} 
+                  style={styles.productImage}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+
+              {/* Product Info */}
+              <View style={styles.productInfo}>
+                <TouchableOpacity onPress={() => navigateToProduct(item.product.id)}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {item.product.name}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.productPrice}>
+                  Rp {item.product.price.toLocaleString('id-ID')}
+                </Text>
+
+                {/* Quantity Controls */}
+                <View style={styles.quantityContainer}>
+                  <Text style={styles.quantityLabel}>Jumlah:</Text>
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity 
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
+                    >
+                      <FontAwesome6 name="minus" size={12} color="#333" iconStyle='solid'/>
+                    </TouchableOpacity>
+                    <Text style={styles.quantityText}>{item.quantity}</Text>
+                    <TouchableOpacity 
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
+                    >
+                      <FontAwesome6 name="plus" size={12} color="#333" iconStyle='solid'/>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Item Total */}
+                <Text style={styles.itemTotal}>
+                  Rp {(item.product.price * item.quantity).toLocaleString('id-ID')}
+                </Text>
+              </View>
+
+              {/* Remove Button */}
+              <TouchableOpacity 
+                style={styles.removeButton}
+                onPress={() => removeItem(item.product.id)}
+              >
+                <FontAwesome6 name="trash" size={16} color="#FF3B30" iconStyle='solid'/>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+
+        {/* Promo Code Section */}
+        <View style={styles.promoSection}>
+          <Text style={styles.sectionTitle}>Kode Promo</Text>
+          <View style={styles.promoContainer}>
+            <TextInput
+              style={styles.promoInput}
+              placeholder="Masukkan kode promo"
+              value={promoCode}
+              onChangeText={setPromoCode}
+              placeholderTextColor="#999"
+            />
+            <TouchableOpacity 
+              style={styles.applyButton}
+              onPress={applyPromoCode}
+            >
+              <Text style={styles.applyButtonText}>Terapkan</Text>
+            </TouchableOpacity>
+          </View>
+          {discount > 0 && (
+            <Text style={styles.discountApplied}>
+              ✅ Diskon {discount}% berhasil diterapkan
+            </Text>
+          )}
+        </View>
+
+        {/* Order Summary */}
+        <View style={styles.summarySection}>
+          <Text style={styles.sectionTitle}>Ringkasan Belanja</Text>
+          
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>
+              Rp {subtotal.toLocaleString('id-ID')}
+            </Text>
+          </View>
+
+          {discount > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Diskon ({discount}%)</Text>
+              <Text style={[styles.summaryValue, styles.discountText]}>
+                - Rp {discountAmount.toLocaleString('id-ID')}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Ongkos Kirim</Text>
+            <Text style={styles.summaryValue}>
+              {shippingCost === 0 ? 'GRATIS' : `Rp ${shippingCost.toLocaleString('id-ID')}`}
+            </Text>
+          </View>
+
+          {shippingCost === 0 && subtotal > 0 && (
+            <Text style={styles.freeShippingText}>
+              🎉 Selamat! Anda mendapatkan gratis ongkir
+            </Text>
+          )}
+
+          <View style={[styles.summaryRow, styles.totalRow]}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>
+              Rp {total.toLocaleString('id-ID')}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Checkout Footer */}
+      <View style={styles.footer}>
+        <View style={styles.footerSummary}>
+          <Text style={styles.footerTotalLabel}>Total Pembayaran</Text>
+          <Text style={styles.footerTotalValue}>
+            Rp {total.toLocaleString('id-ID')}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.checkoutButton}
+          onPress={handleCheckout}
+        >
+          <FontAwesome6 name="credit-card" size={20} color="#fff" />
+          <Text style={styles.checkoutButtonText}>Lanjutkan Pembayaran</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// ... (styles tetap sama seperti sebelumnya)
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    flex: 1,
+  },
+  cartCount: {
+    backgroundColor: '#FF3B30',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  itemsSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  cartItem: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  imageContainer: {
+    marginRight: 12,
+  },
+  productImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  productPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FF3B30',
+    marginBottom: 8,
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quantityLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 12,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+  },
+  quantityButton: {
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  quantityText: {
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  itemTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  removeButton: {
+    padding: 8,
+    alignSelf: 'flex-start',
+  },
+  promoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  promoContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  promoInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+  },
+  applyButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  discountApplied: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  summarySection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  discountText: {
+    color: '#34C759',
+  },
+  freeShippingText: {
+    fontSize: 12,
+    color: '#FF3B30',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  footer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
+  footerSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  footerTotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  footerTotalValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  checkoutButton: {
+    backgroundColor: '#FF3B30',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  checkoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  shopButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  shopButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+export default CartScreen;
+
+--- FILE: ./pages/CheckoutScreen.tsx ---
+
+// FILE: ./pages/CheckoutScreen.tsx
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput,
+  Alert,
+  Modal,
+  Image 
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { useDrawerLock } from '../routes/DrawerNavigator';
+import { useCart } from '../context/CartContext'; // Import useCart
+
+export const CheckoutScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const { cartItems, getTotalPrice, clearCart } = useCart(); // Gunakan cart context
+  
+  const [address, setAddress] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('credit_card');
+  const [promoCode, setPromoCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+
+  // Apply drawer locking
+  useDrawerLock();
+
+  // Calculate totals dari cart
+  const subtotal = getTotalPrice();
+  const discountAmount = (subtotal * discount) / 100;
+  const shippingCost = subtotal > 500000 ? 0 : 15000; // Free shipping above 500k
+  const total = subtotal - discountAmount + shippingCost;
+
+  // Apply promo code
+  const applyPromoCode = () => {
+    const promo = promoCode.trim().toUpperCase();
+    
+    if (!promo) {
+      Alert.alert('Error', 'Masukkan kode promo');
+      return;
+    }
+
+    // Simulasi cek promo code
+    const validPromoCodes: { [key: string]: number } = {
+      'DISKON10': 10,    //dapat diskon 10%
+      'WELCOME15': 15,   //dapat diskon 15%
+      'SPECIAL20': 20    //dapat diskon 20%
+    };
+
+    if (validPromoCodes[promo]) {
+      setDiscount(validPromoCodes[promo]);
+      Alert.alert('Berhasil', `Promo ${promo} berhasil diterapkan!`);
+    } else {
+      setDiscount(0);
+      Alert.alert('Error', 'Kode promo tidak valid');
+    }
+  };
+
+  const handleConfirmOrder = () => {
+    if (!address.trim()) {
+      Alert.alert('Error', 'Harap isi alamat pengiriman');
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      Alert.alert('Error', 'Keranjang belanja kosong');
+      return;
+    }
+
+    Alert.alert(
+      'Konfirmasi Pesanan',
+      `Total pembayaran: Rp ${total.toLocaleString('id-ID')}\n\nAlamat: ${address}\nMetode: ${getPaymentMethodText()}`,
+      [
+        {
+          text: 'Batal',
+          style: 'cancel'
+        },
+        {
+          text: 'Konfirmasi & Bayar',
+          onPress: () => {
+            // Simulasi proses pembayaran berhasil
+            Alert.alert(
+              'Pesanan Berhasil!',
+              'Pesanan Anda sedang diproses. Terima kasih!',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    clearCart(); // Kosongkan cart setelah berhasil
+                    navigation.goBack();
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const getPaymentMethodText = () => {
+    switch (paymentMethod) {
+      case 'credit_card':
+        return 'Kartu Kredit';
+      case 'bank_transfer':
+        return 'Transfer Bank';
+      case 'cod':
+        return 'Bayar di Tempat (COD)';
+      default:
+        return paymentMethod;
+    }
+  };
+
+  return (
+    <Modal
+      visible={true}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent={true}
+    >
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={() => navigation.goBack()}
+          >
+            <FontAwesome6 name="xmark" size={24} color="#333" iconStyle='solid'/>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Product Summary - Tampilkan semua produk di cart */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Produk Dipesan ({cartItems.length} items)
+            </Text>
+            {cartItems.map((item, index) => (
+              <View key={item.product.id} style={styles.productItem}>
+                <Image 
+                  source={item.product.image} 
+                  style={styles.productImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {item.product.name}
+                  </Text>
+                  <Text style={styles.productQuantity}>
+                    Jumlah: {item.quantity}
+                  </Text>
+                  <Text style={styles.productPrice}>
+                    Rp {(item.product.price * item.quantity).toLocaleString('id-ID')}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Shipping Address */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Alamat Pengiriman</Text>
+            <TextInput
+              style={styles.addressInput}
+              placeholder="Masukkan alamat lengkap pengiriman"
+              value={address}
+              onChangeText={setAddress}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {/* Payment Method */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Metode Pembayaran</Text>
+            <TouchableOpacity 
+              style={[
+                styles.paymentOption,
+                paymentMethod === 'credit_card' && styles.paymentOptionSelected
+              ]}
+              onPress={() => setPaymentMethod('credit_card')}
+            >
+              <FontAwesome6 name="credit-card" size={20} color="#007AFF" />
+              <Text style={styles.paymentText}>Kartu Kredit</Text>
+              {paymentMethod === 'credit_card' && (
+                <FontAwesome6 name="check" size={16} color="#007AFF" iconStyle='solid'/>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.paymentOption,
+                paymentMethod === 'bank_transfer' && styles.paymentOptionSelected
+              ]}
+              onPress={() => setPaymentMethod('bank_transfer')}
+            >
+              <FontAwesome6 name="building-columns" size={20} color="#007AFF" iconStyle='solid'/>
+              <Text style={styles.paymentText}>Transfer Bank</Text>
+              {paymentMethod === 'bank_transfer' && (
+                <FontAwesome6 name="check" size={16} color="#007AFF" iconStyle='solid'/>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.paymentOption,
+                paymentMethod === 'cod' && styles.paymentOptionSelected
+              ]}
+              onPress={() => setPaymentMethod('cod')}
+            >
+              <FontAwesome6 name="money-bill-wave" size={20} color="#007AFF" iconStyle='solid'/>
+              <Text style={styles.paymentText}>Bayar di Tempat (COD)</Text>
+              {paymentMethod === 'cod' && (
+                <FontAwesome6 name="check" size={16} color="#007AFF" iconStyle='solid'/>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Promo Code Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Kode Promo</Text>
+            <View style={styles.promoContainer}>
+              <TextInput
+                style={styles.promoInput}
+                placeholder="Masukkan kode promo"
+                value={promoCode}
+                onChangeText={setPromoCode}
+                placeholderTextColor="#999"
+              />
+              <TouchableOpacity 
+                style={styles.applyButton}
+                onPress={applyPromoCode}
+              >
+                <Text style={styles.applyButtonText}>Terapkan</Text>
+              </TouchableOpacity>
+            </View>
+            {discount > 0 && (
+              <Text style={styles.discountApplied}>
+                ✅ Diskon {discount}% berhasil diterapkan
+              </Text>
+            )}
+          </View>
+
+          {/* Order Summary */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ringkasan Pesanan</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal ({cartItems.reduce((total, item) => total + item.quantity, 0)} items)</Text>
+              <Text style={styles.summaryValue}>
+                Rp {subtotal.toLocaleString('id-ID')}
+              </Text>
+            </View>
+
+            {discount > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Diskon ({discount}%)</Text>
+                <Text style={[styles.summaryValue, styles.discountText]}>
+                  - Rp {discountAmount.toLocaleString('id-ID')}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Ongkos Kirim</Text>
+              <Text style={styles.summaryValue}>
+                {shippingCost === 0 ? 'GRATIS' : `Rp ${shippingCost.toLocaleString('id-ID')}`}
+              </Text>
+            </View>
+
+            {shippingCost === 0 && subtotal > 0 && (
+              <Text style={styles.freeShippingText}>
+                🎉 Selamat! Anda mendapatkan gratis ongkir
+              </Text>
+            )}
+
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>Total Pembayaran</Text>
+              <Text style={styles.totalValue}>
+                Rp {total.toLocaleString('id-ID')}
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <View style={styles.footerSummary}>
+            <Text style={styles.footerTotalLabel}>Total</Text>
+            <Text style={styles.footerTotalValue}>
+              Rp {total.toLocaleString('id-ID')}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={[
+              styles.confirmButton,
+              cartItems.length === 0 && styles.confirmButtonDisabled
+            ]} 
+            onPress={handleConfirmOrder}
+            disabled={cartItems.length === 0}
+          >
+            <FontAwesome6 name="credit-card" size={20} color="#fff" />
+            <Text style={styles.confirmButtonText}>
+              {cartItems.length === 0 ? 'Keranjang Kosong' : 'Konfirmasi & Bayar'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+    marginTop: 40, // Account for status bar
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  productItem: {
+    flexDirection: 'row',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  productInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  productQuantity: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  addressInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    backgroundColor: '#f8f9fa',
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  paymentOptionSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#007AFF10',
+  },
+  paymentText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  promoContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  promoInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#f8f9fa',
+  },
+  applyButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  discountApplied: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  discountText: {
+    color: '#34C759',
+  },
+  freeShippingText: {
+    fontSize: 12,
+    color: '#FF3B30',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  footer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
+  footerSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  footerTotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  footerTotalValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FF3B30',
+  },
+  confirmButton: {
+    backgroundColor: '#FF3B30',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./pages/ProductDetailScreen.tsx ---
+
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  ScrollView, 
+  TouchableOpacity, 
+  useWindowDimensions,
+  Alert,
+  ActivityIndicator 
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { DrawerActions } from '@react-navigation/native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { Product } from '../types';
+import { useDrawerLock } from '../routes/DrawerNavigator';
+import { useProducts } from '../context/ProductContext';
+import { useCart } from '../context/CartContext';
+
+// ✅ SOLUSI: Gunakan any type untuk navigation sementara
+export const ProductDetailScreen: React.FC = () => {
+  const navigation = useNavigation<any>(); // ✅ Gunakan any untuk bypass type checking
+  const route = useRoute<any>();
+  
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  const { products } = useProducts();
+  const { addToCart } = useCart();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useDrawerLock();
+
+  const { productId } = route.params;
+
+  useEffect(() => {
+    const fetchProduct = () => {
+      setLoading(true);
+      
+      setTimeout(() => {
+        const foundProduct = products.find(p => p.id === productId);
+        
+        if (foundProduct) {
+          setProduct(foundProduct);
+        } else {
+          Alert.alert('Error', 'Produk tidak ditemukan');
+          navigation.goBack();
+        }
+        
+        setLoading(false);
+      }, 500);
+    };
+
+    fetchProduct();
+  }, [productId, navigation, products]);
+
+  // ✅ SEMUA NAVIGATION SEKARANG WORK tanpa error TypeScript
+  const handleCheckout = () => {
+    if (product) {
+      navigation.navigate('Checkout', { productId: product.id });
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (product) {
+      addToCart(product);
+      Alert.alert(
+        'Berhasil', 
+        `${product.name} telah ditambahkan ke keranjang`,
+        [
+          { 
+            text: 'Lanjut Belanja', 
+            style: 'cancel' 
+          },
+          { 
+            text: 'Lihat Keranjang', 
+            onPress: () => navigation.navigate('Cart')
+          }
+        ]
+      );
+    }
+  };
+
+  const handleNavigateToHome = () => {
+    navigation.navigate('MainApp');
+  };
+
+  const handleResetNavigation = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainApp' }],
+    });
+  };
+
+  const handleGoBackToDrawerHome = () => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.goBack();
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handleCloseDrawerAndReset = () => {
+    const drawer = navigation.getParent();
+    if (drawer) {
+      drawer.dispatch(DrawerActions.closeDrawer());
+    }
+    handleNavigateToHome();
+  };
+
+  const handleMultipleGoBack = () => {
+    const state = navigation.getState();
+    const currentIndex = state.index;
+    
+    if (currentIndex > 0) {
+      for (let i = 0; i < currentIndex; i++) {
+        navigation.goBack();
+      }
+    } else {
+      navigation.navigate('MainApp');
+    }
+  };
+
+  const handleNavigateToAnalytics = () => {
+    navigation.navigate('AnalyticsHistory');
+  };
+
+  // Tampilkan loading indicator
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF3B30" />
+        <Text style={styles.loadingText}>Memuat produk...</Text>
+      </View>
+    );
+  }
+
+  if (!product) {
+    return (
+      <View style={styles.errorContainer}>
+        <FontAwesome6 name="triangle-exclamation" size={60} color="#FF3B30" iconStyle='solid'/>
+        <Text style={styles.errorText}>Produk tidak ditemukan</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Kembali</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const getCategoryIcon = (category?: string) => {
+    switch (category) {
+      case 'electronics':
+        return 'laptop';
+      case 'clothing':
+        return 'shirt';
+      case 'jewelry':
+        return 'gem';
+      case 'backpack':
+        return 'bag-shopping';
+      default:
+        return 'box';
+    }
+  };
+
+  return (
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isLandscape && styles.landscapeContent
+      ]}
+    >
+      {/* Product Image */}
+      <View style={[
+        styles.imageContainer,
+        isLandscape && styles.landscapeImageContainer
+      ]}>
+        <Image 
+          source={product.image} 
+          style={[
+            styles.image,
+            isLandscape && styles.landscapeImage
+          ]}
+          resizeMode="contain"
+        />
+      </View>
+
+      {/* Product Info */}
+      <View style={[
+        styles.infoContainer,
+        isLandscape && styles.landscapeInfoContainer
+      ]}>
+        {/* Category Badge */}
+        <View style={styles.categoryContainer}>
+          <FontAwesome6 
+            name={getCategoryIcon(product.category) as any} 
+            size={14} 
+            color="#666" 
+          />
+          <Text style={styles.categoryText}>
+            {product.category ? product.category.charAt(0).toUpperCase() + product.category.slice(1) : 'General'}
+          </Text>
+        </View>
+
+        <Text style={styles.productName}>{product.name}</Text>
+        <Text style={styles.productPrice}>
+          Rp {product.price.toLocaleString('id-ID')}
+        </Text>
+        
+        <View style={styles.ratingContainer}>
+          <FontAwesome6 name="star" size={16} color="#FFD700" />
+          <Text style={styles.rating}>4.8</Text>
+          <Text style={styles.sold}>(100+ terjual)</Text>
+          <Text style={styles.productId}>• ID: {product.id}</Text>
+        </View>
+
+        <Text style={styles.descriptionTitle}>Deskripsi Produk</Text>
+        <Text style={styles.productDescription}>{product.description}</Text>
+
+        {/* Product Specifications */}
+        {product.specifications && product.specifications.length > 0 && (
+          <View style={styles.specsContainer}>
+            <Text style={styles.specsTitle}>Spesifikasi Produk:</Text>
+            {product.specifications.map((spec, index) => (
+              <View key={index} style={styles.specItem}>
+                <FontAwesome6 name="check" size={14} color="#34C759" iconStyle='solid'/>
+                <Text style={styles.specText}>{spec}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Additional Info */}
+        <View style={styles.additionalInfo}>
+          <View style={styles.infoItem}>
+            <FontAwesome6 name="ship" size={16} color="#34C759" iconStyle='solid'/>
+            <Text style={styles.infoText}>Gratis Ongkir</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <FontAwesome6 name="rotate-left" size={16} color="#34C759" iconStyle='solid'/>
+            <Text style={styles.infoText}>Bisa Return</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <FontAwesome6 name="shield" size={16} color="#34C759" iconStyle='solid'/>
+            <Text style={styles.infoText}>Garansi Resmi</Text>
+          </View>
+        </View>
+
+        {/* Custom Navigation Actions */}
+        <View style={styles.customActionsContainer}>
+          <Text style={styles.customActionsTitle}>🚀 Aksi Navigasi (Fixed):</Text>
+          
+          <Text style={styles.actionsDescription}>
+            Type assertion digunakan untuk bypass TypeScript strict mode
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.customButton, styles.navigateButton]}
+            onPress={handleNavigateToHome}
+          >
+            <FontAwesome6 name="house" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Ke Home (navigate)</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.customButton, styles.resetButton]}
+            onPress={handleResetNavigation}
+          >
+            <FontAwesome6 name="rotate-left" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Reset Navigation</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.customButton, styles.multipleButton]}
+            onPress={handleMultipleGoBack}
+          >
+            <FontAwesome6 name="angles-up" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Multiple Go Back</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.customButton, styles.analyticsButton]}
+            onPress={handleNavigateToAnalytics}
+          >
+            <FontAwesome6 name="chart-line" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Ke Analytics</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.customButton, styles.drawerButton]}
+            onPress={handleGoBackToDrawerHome}
+          >
+            <FontAwesome6 name="arrow-left" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Parent Go Back</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.customButton, styles.comboButton]}
+            onPress={handleCloseDrawerAndReset}
+          >
+            <FontAwesome6 name="layer-group" size={16} color="#fff" iconStyle='solid'/>
+            <Text style={styles.customButtonText}>Kombinasi Aksi</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Product Action Buttons */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.button, styles.addToCartButton]}
+            onPress={handleAddToCart}
+          >
+            <FontAwesome6 name="cart-plus" size={20} color="#FF3B30" iconStyle='solid'/>
+            <Text style={styles.addToCartText}>Tambah Keranjang</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.button, styles.checkoutButton]}
+            onPress={handleCheckout}
+          >
+            <FontAwesome6 name="bag-shopping" size={20} color="#fff" iconStyle='solid'/>
+            <Text style={styles.checkoutText}>Beli Sekarang</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Status Info */}
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusText}>✅ Semua navigation functions bekerja!</Text>
+          <Text style={styles.statusSubtext}>Type assertion mengatasi TypeScript strict mode</Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+// Styles tetap sama seperti sebelumnya
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  contentContainer: {
+    flexGrow: 1,
+  },
+  landscapeContent: {
+    flexDirection: 'row',
+    padding: 16,
+  },
+  imageContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  landscapeImageContainer: {
+    flex: 1,
+    borderBottomWidth: 0,
+    borderRightWidth: 1,
+    borderRightColor: '#e8e8e8',
+    justifyContent: 'center',
+  },
+  image: {
+    width: '100%',
+    height: 300,
+  },
+  landscapeImage: {
+    height: 400,
+    maxWidth: 400,
+  },
+  infoContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    flex: 1,
+  },
+  landscapeInfoContainer: {
+    flex: 1,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  productName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  productPrice: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FF3B30',
+    marginBottom: 12,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  rating: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  sold: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 12,
+  },
+  productId: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  descriptionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  productDescription: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  specsContainer: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  specsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  specItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  specText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 20,
+  },
+  additionalInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#f0f9f0',
+    borderRadius: 8,
+  },
+  infoItem: {
+    alignItems: 'center',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#34C759',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  customActionsContainer: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  customActionsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  actionsDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  customButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  navigateButton: {
+    backgroundColor: '#007AFF',
+  },
+  resetButton: {
+    backgroundColor: '#34C759',
+  },
+  multipleButton: {
+    backgroundColor: '#FF9500',
+  },
+  analyticsButton: {
+    backgroundColor: '#5856D6',
+  },
+  drawerButton: {
+    backgroundColor: '#FF2D55',
+  },
+  comboButton: {
+    backgroundColor: '#AF52DE',
+  },
+  customButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  addToCartButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#FF3B30',
+  },
+  checkoutButton: {
+    backgroundColor: '#FF3B30',
+  },
+  addToCartText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+  },
+  checkoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  statusContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E7D32',
+    marginBottom: 4,
+  },
+  statusSubtext: {
+    fontSize: 12,
+    color: '#388E3C',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  backButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./routes/AppNavigator.tsx ---
+
+import React from 'react';
+import RootNavigator from './RootNavigator';
+
+export const AppNavigator: React.FC = () => {
+  return <RootNavigator />;
+};
+
+--- FILE: ./routes/BottomTabsNavigator.tsx ---
+
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { Dashboard } from '../pages/Dashboard/Dashboard';
+import { Product } from '../pages/Dashboard/Product';
+import { Profile } from '../pages/Dashboard/Profile';
+import { HomeStackNavigator } from './HomeStackNavigator';
+
+export type BottomTabParamList = {
+  HomeStack: undefined;
+  Dashboard: undefined;
+  Product: undefined;
+  Profile: undefined;
+};
+
+const Tab = createBottomTabNavigator<BottomTabParamList>();
+
+export const BottomTabsNavigator: React.FC = () => {
+  return (
+    <Tab.Navigator
+      initialRouteName="HomeStack"
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: string;
+
+          if (route.name === 'HomeStack') {
+            iconName = 'house';
+          } else if (route.name === 'Dashboard') {
+            iconName = 'chart-column';
+          } else if (route.name === 'Product') {
+            iconName = 'box';
+          } else if (route.name === 'Profile') {
+            iconName = 'user';
+          } else {
+            iconName = 'circle-question';
+          }
+
+          return (
+            <FontAwesome6 
+              name={iconName as 'house'} 
+              size={size} 
+              color={color}
+              iconStyle='solid'
+            />
+          );
+        },
+        tabBarActiveTintColor: '#FF3B30',
+        tabBarInactiveTintColor: 'gray',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopWidth: 1,
+          borderTopColor: '#e8e8e8',
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
+        headerShown: false, // Header akan ditangani oleh Stack Navigator
+        lazy: true,
+      })}
+    >
+      <Tab.Screen 
+        name="HomeStack" 
+        component={HomeStackNavigator}
+        options={{
+          title: 'Beranda',
+        }}
+      />
+      <Tab.Screen 
+        name="Dashboard" 
+        component={Dashboard}
+        options={{
+          title: 'Dashboard',
+        }}
+      />
+      <Tab.Screen 
+        name="Product" 
+        component={Product}
+        options={{
+          title: 'Produk',
+        }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={Profile}
+        options={{
+          title: 'Profil',
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+--- FILE: ./routes/DrawerNavigator.tsx ---
+
+// FILE: ./routes/DrawerNavigator.tsx
+import React, { useState, useEffect } from 'react';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import FontAwesome6 from '@react-native-vector-icons/fontawesome6';
+import { Home } from '../pages/Dashboard/Home';
+import { Profile } from '../pages/Dashboard/Profile';
+import { Product } from '../pages/Dashboard/Product';
+import { Dashboard } from '../pages/Dashboard/Dashboard';
+import { Settings } from '../pages/Dashboard/Setting';
+import { BottomTabsNavigator } from './BottomTabsNavigator';
+
+const Drawer = createDrawerNavigator();
+
+// Custom hook untuk drawer locking - EKSPORT hook ini
+export const useDrawerLock = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const [drawerLocked, setDrawerLocked] = useState(false);
+
+  useEffect(() => {
+    const currentRouteName = route.name;
+    const lockedScreens = ['ProductDetail', 'Checkout'];
+    const shouldLock = lockedScreens.includes(currentRouteName);
+
+    console.log(`Drawer locking: ${shouldLock ? 'LOCKED' : 'UNLOCKED'} for ${currentRouteName}`);
+    
+    // Untuk Drawer Navigator, gunakan swipeEnabled saja
+    navigation.setOptions({
+      swipeEnabled: !shouldLock,
+    });
+  }, [navigation, route.name]);
+};
+
+// Component untuk Profile dengan drawer lock
+const ProfileWithDrawerLock: React.FC<any> = (props) => {
+  useDrawerLock();
+  return <Profile {...props} />;
+};
+
+// Component untuk Settings dengan drawer lock  
+const SettingsWithDrawerLock: React.FC<any> = (props) => {
+  useDrawerLock();
+  return <Settings {...props} />;
+};
+
+export default function DrawerNavigator() {
+  const [drawerLocked, setDrawerLocked] = useState(false);
+
+  return (
+    <Drawer.Navigator
+      screenOptions={{
+        headerShown: true,
+        drawerActiveTintColor: '#FF3B30',
+        swipeEnabled: !drawerLocked,
+      }}
+    >
+      <Drawer.Screen
+        name="MainApp"
+        component={BottomTabsNavigator}
+        options={{
+          title: "Rits Marketplace",
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome6 name="house" size={size} color={color} iconStyle="solid" />
+          ),
+          headerShown: false, // Header ditangani oleh child navigators
+        }}
+      />
+
+      <Drawer.Screen
+        name="Profile"
+        component={ProfileWithDrawerLock}
+        options={{
+          title: "Profil",
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome6 name="user" size={size} color={color} iconStyle="solid" />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="Product"
+        component={Product}
+        options={{
+          title: "Produk",
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome6 name="box" size={size} color={color} iconStyle="solid" />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="Dashboard"
+        component={Dashboard}
+        options={{
+          title: "Dashboard",
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome6 name="chart-column" size={size} color={color} iconStyle="solid" />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="Settings"
+        component={SettingsWithDrawerLock}
+        options={{
+          title: "Pengaturan",
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome6 name="gear" size={size} color={color} iconStyle="solid" />
+          ),
+        }}
+      />
+    </Drawer.Navigator>
+  );
+}
+
+--- FILE: ./routes/HomeStackNavigator.tsx ---
+
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Home } from '../pages/Dashboard/Home';
+import { ProductDetailScreen } from '../pages/ProductDetailScreen';
+import { CheckoutScreen } from '../pages/CheckoutScreen';
+
+export type HomeStackParamList = {
+  HomeTabs: undefined;
+  ProductDetail: { productId: string };
+  Checkout: { productId: string };
+};
+
+const Stack = createNativeStackNavigator<HomeStackParamList>();
+
+export const HomeStackNavigator: React.FC = () => {
+  return (
+    <Stack.Navigator
+      initialRouteName="HomeTabs"
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#fff',
+        },
+        headerTintColor: '#333',
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
+      }}
+    >
+      <Stack.Screen 
+        name="HomeTabs" 
+        component={Home}
+        options={{ 
+          headerShown: true,
+          title: 'Rits Marketplace',
+          headerRight: () => null, // Kita akan handle header buttons di Home component
+        }}
+      />
+      <Stack.Screen 
+        name="ProductDetail" 
+        component={ProductDetailScreen}
+        options={{ 
+          headerShown: true,
+          title: 'Detail Produk',
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="Checkout" 
+        component={CheckoutScreen}
+        options={{ 
+          headerShown: true,
+          title: 'Checkout',
+          presentation: 'modal',
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+--- FILE: ./routes/RootNavigator.tsx ---
+
+import React, { useRef } from 'react';
+import { NavigationContainer, NavigationState } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { LoginScreen } from '../pages/Auth/LoginScreen';
+import { RegisterScreen } from '../pages/Auth/RegisterScreen';
+import DrawerNavigator from './DrawerNavigator';
+import { AnalyticsHistoryScreen } from '../pages/AnalyticsHistoryScreen';
+import { ProductDetailScreen } from '../pages/ProductDetailScreen';
+import { CheckoutScreen } from '../pages/CheckoutScreen';
+import CartScreen from '../pages/CartScreen';
+import { CartProvider } from '../context/CartContext';
+import { ProductsProvider } from '../context/ProductContext';
+
+const Stack = createNativeStackNavigator();
+
+// Global analytics state
+let analyticsHistory: string[] = [];
+
+export const addAnalyticsEvent = (event: string) => {
+  const timestamp = new Date().toLocaleTimeString();
+  analyticsHistory.push(`[${timestamp}] ${event}`);
+  console.log(`[ANALYTICS] ${event}`);
+};
+
+export const getAnalyticsHistory = () => [...analyticsHistory];
+
+export const clearAnalyticsHistory = () => {
+  analyticsHistory = [];
+};
+
+// Helper function to get active route name
+const getActiveRouteName = (state: NavigationState): string => {
+  if (!state) return 'Unknown';
+  
+  const route = state.routes[state.index ?? 0];
+  
+  if (route.state) {
+    return getActiveRouteName(route.state as NavigationState);
+  }
+  
+  return route.name;
+};
+
+// Custom hook untuk analytics tracking
+const useAnalyticsTracker = () => {
+  const routeNameRef = useRef<string>('Unknown');
+  
+  const handleStateChange = (state: NavigationState | undefined) => {
+    if (!state) return;
+    
+    const previousRouteName = routeNameRef.current;
+    const currentRouteName = getActiveRouteName(state);
+    
+    if (previousRouteName !== currentRouteName) {
+      addAnalyticsEvent(`Navigated from ${previousRouteName} to ${currentRouteName}`);
+      
+      // Log informasi nested structure
+      const routeStack = getRouteStack(state);
+      addAnalyticsEvent(`Route Stack: ${routeStack.join(' → ')}`);
+    }
+    
+    routeNameRef.current = currentRouteName;
+  };
+
+  const getRouteStack = (state: NavigationState): string[] => {
+    const stack: string[] = [];
+    
+    const traverseRoutes = (navState: NavigationState) => {
+      const route = navState.routes[navState.index ?? 0];
+      stack.push(route.name);
+      
+      if (route.state) {
+        traverseRoutes(route.state as NavigationState);
+      }
+    };
+    
+    traverseRoutes(state);
+    return stack;
+  };
+
+  return { handleStateChange };
+};
+
+export default function RootNavigator() {
+  const { handleStateChange } = useAnalyticsTracker();
+
+  return (
+    <ProductsProvider>
+      <CartProvider>
+        <NavigationContainer onStateChange={handleStateChange}>
+          <Stack.Navigator 
+            initialRouteName="Login" 
+            screenOptions={{ 
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          >
+            {/* Auth Screens */}
+            <Stack.Screen 
+              name="Login" 
+              component={LoginScreen}
+              listeners={{
+                focus: () => addAnalyticsEvent('Login Screen focused'),
+              }}
+            />
+            
+            <Stack.Screen 
+              name="Register" 
+              component={RegisterScreen}
+              listeners={{
+                focus: () => addAnalyticsEvent('Register Screen focused'),
+              }}
+            />
+            
+            {/* Main App dengan Nested Navigation */}
+            <Stack.Screen 
+              name="MainApp" 
+              component={DrawerNavigator}
+              initialParams={{ 
+                userToken: 'DEMO_TOKEN_123', // SOAL PRAKTIK 5: Token untuk auth guard
+                userID: 'U123'
+              }}
+              listeners={{
+                focus: () => addAnalyticsEvent('Main App Drawer focused'),
+              }}
+            />
+            
+            {/* Modal Screens */}
+            <Stack.Screen 
+              name="AnalyticsHistory" 
+              component={AnalyticsHistoryScreen}
+              options={{ 
+                headerShown: true, 
+                title: 'Analytics History',
+                presentation: 'modal',
+                animation: 'slide_from_bottom'
+              }}
+              listeners={{
+                focus: () => addAnalyticsEvent('Analytics History Modal opened'),
+              }}
+            />
+            
+            {/* Product Flow Screens */}
+            <Stack.Screen 
+              name="ProductDetail" 
+              component={ProductDetailScreen}
+              options={{ 
+                headerShown: true,
+                title: 'Detail Produk',
+                presentation: 'card',
+                animation: 'slide_from_right'
+              }}
+              listeners={{
+                focus: () => addAnalyticsEvent('Product Detail Screen focused'),
+              }}
+            />
+            
+            <Stack.Screen 
+              name="Checkout" 
+              component={CheckoutScreen}
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+                animation: 'slide_from_bottom'
+              }}
+              listeners={{
+                focus: () => addAnalyticsEvent('Checkout Modal opened'),
+              }}
+            />
+            
+            <Stack.Screen 
+              name="Cart" 
+              component={CartScreen}
+              options={{ 
+                headerShown: true,
+                title: 'Keranjang Belanja',
+                presentation: 'card'
+              }}
+              listeners={{
+                focus: () => addAnalyticsEvent('Cart Screen focused'),
+              }}
+            />
+            
+            {/* ✅ SOLUSI: Group dengan children atau hapus Group jika tidak digunakan */}
+            {/* 
+            <Stack.Group
+              screenOptions={{
+                presentation: 'transparentModal',
+                animation: 'fade'
+              }}
+            >
+              {/* Future modal screens bisa ditambahkan di sini */}
+              {/* Contoh: <Stack.Screen name="CustomModal" component={CustomModal} /> */}
+            {/* </Stack.Group> 
+            */}
+            
+          </Stack.Navigator>
+        </NavigationContainer>
+      </CartProvider>
+    </ProductsProvider>
+  );
+}
+
+// Export types untuk TypeScript
+export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  MainApp: { 
+    userToken?: string;
+    userID?: string;
+  };
+  AnalyticsHistory: undefined;
+  ProductDetail: { productId: string };
+  Checkout: { productId: string };
+  Cart: undefined;
+};
+
+// Extend Native Stack Navigation Prop
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
+
+--- FILE: ./context/CartContext.tsx ---
+
+// FILE: ./context/CartContext.tsx
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { Product } from '../types';
+
+interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+interface CartContextType {
+  cartItems: CartItem[];
+  addToCart: (product: Product) => void;
+  removeFromCart: (productId: string) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  clearCart: () => void;
+  getCartItemCount: () => number;
+  getTotalPrice: () => number;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  const addToCart = (product: Product) => {
+    setCartItems(prev => {
+      const existingItem = prev.find(item => item.product.id === product.id);
+      
+      if (existingItem) {
+        // Jika produk sudah ada, tambah quantity
+        return prev.map(item =>
+          item.product.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      } else {
+        // Jika produk belum ada, tambah item baru
+        return [...prev, { product, quantity: 1 }];
+      }
+    });
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCartItems(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity < 1) {
+      removeFromCart(productId);
+      return;
+    }
+
+    setCartItems(prev =>
+      prev.map(item =>
+        item.product.id === productId
+          ? { ...item, quantity }
+          : item
+      )
+    );
+  };
+
+  const clearCart = () => {
+    setCartItems([]);
+  };
+
+  const getCartItemCount = () => {
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const getTotalPrice = () => {
+    return cartItems.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+  };
+
+  // PERBAIKAN: Hapus string yang tidak perlu dan pastikan hanya return JSX yang valid
+  const value: CartContextType = {
+    cartItems,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    getCartItemCount,
+    getTotalPrice
+  };
+
+  return (
+    <CartContext.Provider value={value}>
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (context === undefined) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+};
+
+--- FILE: ./context/ProductContext.tsx ---
+
+// FILE: ./context/ProductsContext.tsx
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { Product } from '../types';
+import { initialProducts } from '../data/initialProducts';
+
+interface ProductsContextType {
+  products: Product[];
+  addProduct: (product: Product) => void;
+  updateProduct: (productId: string, product: Partial<Product>) => void;
+  deleteProduct: (productId: string) => void;
+}
+
+const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
+
+export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+
+  const addProduct = (product: Product) => {
+    setProducts(prev => [product, ...prev]);
+  };
+
+  const updateProduct = (productId: string, updatedProduct: Partial<Product>) => {
+    setProducts(prev =>
+      prev.map(product =>
+        product.id === productId ? { ...product, ...updatedProduct } : product
+      )
+    );
+  };
+
+  const deleteProduct = (productId: string) => {
+    setProducts(prev => prev.filter(product => product.id !== productId));
+  };
+
+  return (
+    <ProductsContext.Provider value={{
+      products,
+      addProduct,
+      updateProduct,
+      deleteProduct
+    }}>
+      {children}
+    </ProductsContext.Provider>
+  );
+};
+
+export const useProducts = () => {
+  const context = useContext(ProductsContext);
+  if (context === undefined) {
+    throw new Error('useProducts must be used within a ProductsProvider');
+  }
+  return context;
+};
+
+--- FILE: ./hooks/useDrawerGesture.ts ---
+
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useEffect } from 'react';
+
+export const useDrawerGesture = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
+
+  useEffect(() => {
+    // Dapatkan nama route saat ini
+    const currentRouteName = route.name;
+    
+    // Tentukan screen mana yang harus menonaktifkan swipe gesture
+    const disableSwipeScreens = ['ProductDetail', 'Checkout'];
+    const shouldDisableSwipe = disableSwipeScreens.includes(currentRouteName);
+
+    // Update options berdasarkan route
+    navigation.setOptions({
+      swipeEnabled: !shouldDisableSwipe,
+    });
+  }, [navigation, route.name]);
+};
+
+--- FILE: ./src.txt ---
+
