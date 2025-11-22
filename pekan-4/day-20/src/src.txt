@@ -1,0 +1,4615 @@
+
+
+--- FILE: ./components/AuthGuard.tsx ---
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
+interface AuthGuardProps {
+  children: React.ReactNode;
+  isAuthenticated: boolean;
+}
+
+export const AuthGuard: React.FC<AuthGuardProps> = ({ children, isAuthenticated }) => {
+  console.log('🔐 AuthGuard - isAuthenticated:', isAuthenticated); // ✅ DEBUG
+  
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Harap Login</Text>
+        <Text style={styles.message}>Silakan login untuk mengakses fitur ini</Text>
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
+
+--- FILE: ./components/ErrorBoundary.tsx ---
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: any;
+}
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { 
+      hasError: false, 
+      error: null,
+      errorInfo: null 
+    };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('Error Boundary caught:', error, errorInfo);
+    this.setState({
+      errorInfo: errorInfo
+    });
+  }
+
+  resetError = () => {
+    this.setState({ 
+      hasError: false, 
+      error: null,
+      errorInfo: null 
+    });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.container}>
+          <Text style={styles.title}>⚠️ Aplikasi Mengalami Masalah</Text>
+          <Text style={styles.message}>
+            Terjadi kesalahan tak terduga. Silakan mulai ulang aplikasi.
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={this.resetError}>
+            <Text style={styles.buttonText}>Mulai Ulang Aplikasi</Text>
+          </TouchableOpacity>
+          {__DEV__ && this.state.error && (
+            <Text style={styles.debugText}>
+              Error: {this.state.error.toString()}
+            </Text>
+          )}
+          {__DEV__ && this.state.errorInfo && (
+            <Text style={styles.debugText}>
+              Component Stack: {JSON.stringify(this.state.errorInfo.componentStack)}
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+    color: '#333', // ✅ TAMBAHKAN COLOR EXPLICIT
+  },
+  message: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  button: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  debugText: {
+    marginTop: 16,
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+    textAlign: 'center',
+  },
+});
+
+export default ErrorBoundary;
+
+--- FILE: ./components/ProductForm.tsx ---
+
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { ProductFormData } from '../types/types';
+
+interface ProductFormProps {
+  onSubmit: (data: ProductFormData) => void;
+  onCancel: () => void;
+}
+
+export const ProductForm: React.FC<ProductFormProps> = ({ onSubmit, onCancel }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    price: '',
+    image: { uri: '' },
+    description: ''
+  });
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (!formData.name.trim()) newErrors.name = 'Nama wajib diisi';
+    if (!formData.price.trim()) newErrors.price = 'Harga wajib diisi';
+    else if (isNaN(Number(formData.price))) newErrors.price = 'Harga harus angka';
+    if (!formData.image.uri.trim()) newErrors.image = 'URL gambar wajib diisi';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validateForm()) {
+      onSubmit(formData);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Tambah Produk</Text>
+      
+      <TextInput
+        style={[styles.input, errors.name && styles.inputError]}
+        placeholder="Nama Produk"
+        value={formData.name}
+        onChangeText={(text) => setFormData({...formData, name: text})}
+      />
+      {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+      <TextInput
+        style={[styles.input, errors.price && styles.inputError]}
+        placeholder="Harga"
+        value={formData.price}
+        onChangeText={(text) => setFormData({...formData, price: text})}
+        keyboardType="numeric"
+      />
+      {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+
+      <TextInput
+        style={[styles.input, errors.image && styles.inputError]}
+        placeholder="URL Gambar"
+        value={formData.image.uri}
+        onChangeText={(text) => setFormData({...formData, image: { uri: text }})}
+      />
+      {errors.image && <Text style={styles.errorText}>{errors.image}</Text>}
+
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        placeholder="Deskripsi"
+        value={formData.description}
+        onChangeText={(text) => setFormData({...formData, description: text})}
+        multiline
+      />
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+          <Text style={styles.cancelButtonText}>Batal</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+          <Text style={styles.submitButtonText}>Tambah</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: 'red',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#ccc',
+    padding: 16,
+    borderRadius: 8,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontWeight: '600',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./components/ProductItem.tsx ---
+
+import React from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { Product } from '../types/types'; 
+
+interface ProductItemProps {
+  product: Product;
+  onPress: () => void;
+}
+
+export const ProductItem: React.FC<ProductItemProps> = ({ product, onPress }) => {
+  const { width } = useWindowDimensions();
+  const isLandscape = width > 600;
+  
+  return (
+    <TouchableOpacity 
+      style={[styles.container, isLandscape && styles.landscapeContainer]} 
+      onPress={onPress}
+    >
+      <Image 
+        source={product.image} 
+        style={[styles.image, isLandscape && styles.landscapeImage]} 
+        defaultSource={{ uri: 'https://picsum.photos/300/200' }}
+      />
+      <View style={styles.info}>
+        <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
+        <Text style={styles.price}>Rp {product.price.toLocaleString('id-ID')}</Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {product.description}
+        </Text>
+        {product.category && (
+          <Text style={styles.category}>{product.category}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    margin: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  landscapeContainer: {
+    flexDirection: 'row',
+    height: 120,
+  },
+  image: {
+    width: '100%',
+    height: 150,
+  },
+  landscapeImage: {
+    width: 120,
+    height: '100%',
+  },
+  info: {
+    padding: 12,
+    flex: 1,
+  },
+  name: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: '#333',
+  },
+  price: {
+    fontSize: 18,
+    color: '#FF3B30',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  description: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  category: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+});
+
+--- FILE: ./components/ProtectedRoute.tsx ---
+
+import React from 'react';
+import { getToken } from '../services/keychain';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const token = await getToken();
+    setIsAuthenticated(!!token);
+  };
+
+  if (isAuthenticated === null) {
+    return null; // atau loading spinner
+  }
+
+  if (!isAuthenticated) {
+    // Redirect ke LoginScreen akan dihandle oleh navigation
+    return null;
+  }
+
+  return <>{children}</>;
+};
+
+--- FILE: ./components/ProductList.tsx ---
+
+import React, { useEffect, useState } from 'react';
+import { FlatList, Image, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { Product } from '../types/types';
+import { initialProducts } from '../types/data';
+import { productService } from '../services/api';
+
+type Props = {
+    route?: any;
+    category?: string;
+}
+
+export default function ProductList({ route, category }: Props) {
+    const [products, setProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Ambil category dari route params atau langsung dari prop
+    const currentCategory = route?.params?.category || category;
+
+    const getProducts = async () => {
+        try {
+            setLoading(true);
+            
+            if (currentCategory === 'semua') {
+                // ✅ TAB SEMUA: Gabungkan data lokal + SEMUA data dari API
+                
+                // 1. Ambil SEMUA data dari API (tanpa limit)
+                const result = await productService.getProducts();
+                
+                if (result.success && result.data) {
+                    // 2. Transform SEMUA data API ke format yang sama
+                    const apiProducts: Product[] = result.data.products
+                        .map((apiProduct: any) => ({
+                            id: `api_${apiProduct.id}`, // Tambah prefix untuk hindari duplikat ID
+                            name: apiProduct.title,
+                            price: apiProduct.price,
+                            image: { uri: apiProduct.thumbnail },
+                            description: apiProduct.description,
+                            category: apiProduct.category
+                        }));
+                    
+                    // 3. Gabungkan data lokal + SEMUA data API
+                    const combinedProducts = [...initialProducts, ...apiProducts];
+                    setProducts(combinedProducts);
+                    console.log(`✅ Tab Semua: ${initialProducts.length} produk lokal + ${apiProducts.length} produk API = ${combinedProducts.length} total`);
+                } else {
+                    // Jika API gagal, tetap tampilkan data lokal
+                    setProducts(initialProducts);
+                }
+                
+            } else {
+                // ✅ TAB KATEGORI LAIN: Ambil dari API dan filter by kategori
+                const result = await productService.getProducts();
+                if (result.success && result.data) {
+                    const filteredProducts = result.data.products
+                        .filter((product: any) => product.category === currentCategory)
+                        .map((apiProduct: any) => ({
+                            id: apiProduct.id.toString(),
+                            name: apiProduct.title,
+                            price: apiProduct.price,
+                            image: { uri: apiProduct.thumbnail },
+                            description: apiProduct.description,
+                            category: apiProduct.category
+                        }));
+                    setProducts(filteredProducts);
+                    console.log(`✅ Tab ${currentCategory}: ${filteredProducts.length} produk`);
+                } else {
+                    setProducts([]);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching products:', error);
+            // Fallback: Tampilkan data lokal saja jika error
+            if (currentCategory === 'semua') {
+                setProducts(initialProducts);
+            } else {
+                setProducts([]);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        getProducts();
+    }, [currentCategory]);
+
+    if (loading) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text>Memuat produk...</Text>
+            </View>
+        );
+    }
+
+    return (
+        <FlatList
+            data={products}
+            keyExtractor={item => item.id}
+            numColumns={2}
+            contentContainerStyle={styles.container}
+            renderItem={({ item }) => (
+                <View style={styles.card}>
+                    <Image
+                        style={styles.cardImage}
+                        source={item.image}
+                        defaultSource={{ uri: 'https://picsum.photos/300/200' }}
+                    />
+                    <Text style={styles.title} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.price}>Rp {item.price.toLocaleString('id-ID')}</Text>
+                    <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
+                    <Text style={styles.category}>{item.category}</Text>
+                    <Text style={styles.source}>
+                        {item.id.startsWith('api_') ? '🔄 From API' : '📱 Local'}
+                    </Text>
+                </View>
+            )}
+            ListEmptyComponent={
+                <View style={styles.center}>
+                    <Text>Tidak ada produk di kategori {currentCategory}</Text>
+                </View>
+            }
+        />
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        padding: 10,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    card: {
+        flex: 1,
+        margin: 5,
+        padding: 10,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        maxWidth: '48%',
+    },
+    cardImage: {
+        width: '100%',
+        height: 120,
+        borderRadius: 6,
+        marginBottom: 8,
+    },
+    title: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        color: '#333',
+    },
+    price: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#FF3B30',
+        marginBottom: 4,
+    },
+    description: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 4,
+    },
+    category: {
+        fontSize: 10,
+        color: '#007AFF',
+        marginBottom: 2,
+        textTransform: 'capitalize',
+    },
+    source: {
+        fontSize: 10,
+        color: '#888',
+        fontStyle: 'italic',
+    },
+});
+
+--- FILE: ./context/NetworkContext.tsx ---
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import { addAnalyticsEvent } from '../../App';
+
+interface NetworkContextType {
+  isConnected: boolean | null;
+  type: string;
+  isInternetReachable: boolean | null;
+}
+
+const NetworkContext = createContext<NetworkContextType>({ 
+  isConnected: true,
+  type: 'unknown',
+  isInternetReachable: true
+});
+
+export const useNetwork = () => {
+  const context = useContext(NetworkContext);
+  if (context === undefined) {
+    throw new Error('useNetwork must be used within a NetworkProvider');
+  }
+  return context;
+};
+
+interface NetworkProviderProps {
+  children: React.ReactNode;
+}
+
+export const NetworkProvider: React.FC<NetworkProviderProps> = ({ children }) => {
+  const [networkState, setNetworkState] = useState<NetworkContextType>({
+    isConnected: true,
+    type: 'unknown',
+    isInternetReachable: true
+  });
+
+  const [showBanner, setShowBanner] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const newState = {
+        isConnected: state.isConnected,
+        type: state.type,
+        isInternetReachable: state.isInternetReachable
+      };
+
+      setNetworkState(newState);
+
+      // Tampilkan/sembunyikan banner berdasarkan status koneksi
+      if (!state.isConnected || !state.isInternetReachable) {
+        setShowBanner(true);
+      } else {
+        setShowBanner(false);
+      }
+
+      // Log perubahan status koneksi
+      if (state.isConnected !== networkState.isConnected) {
+        const event = state.isConnected ? 
+          `Koneksi pulih (${state.type}). Melanjutkan operasi.` : 
+          `Koneksi terputus (${state.type}). Menggunakan mode offline.`;
+        
+        addAnalyticsEvent(event);
+      }
+    });
+
+    // Fetch initial state
+    NetInfo.fetch().then(state => {
+      setNetworkState({
+        isConnected: state.isConnected,
+        type: state.type,
+        isInternetReachable: state.isInternetReachable
+      });
+      
+      if (!state.isConnected || !state.isInternetReachable) {
+        setShowBanner(true);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <NetworkContext.Provider value={networkState}>
+      {children}
+      
+      {/* Global Network Banner */}
+      {showBanner && (
+        <View style={[
+          styles.banner,
+          networkState.isConnected ? styles.onlineBanner : styles.offlineBanner
+        ]}>
+          <Text style={styles.bannerText}>
+            {!networkState.isConnected ? 
+              '📶 Koneksi terputus. Menggunakan mode offline.' :
+              '🌐 Koneksi terbatas. Beberapa fitur mungkin tidak tersedia.'
+            }
+          </Text>
+        </View>
+      )}
+    </NetworkContext.Provider>
+  );
+};
+
+const styles = StyleSheet.create({
+  banner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  offlineBanner: {
+    backgroundColor: '#FF3B30',
+  },
+  onlineBanner: {
+    backgroundColor: '#FF9500',
+  },
+  bannerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});
+
+--- FILE: ./hooks/useAdvancedCart.ts ---
+
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { simpleStorage } from '../services/storage';
+
+export const useAdvancedCart = () => {
+  const [cart, setCart] = useState<{[key: string]: any}>({});
+
+  // Load cart saat app start
+  useEffect(() => {
+    loadCart();
+  }, []);
+
+  const loadCart = async () => {
+    const savedCart = await simpleStorage.get('@cart');
+    if (savedCart) {
+      setCart(savedCart);
+    }
+  };
+
+  // ✅ UPDATE ITEM DENGAN MERGE (efisien untuk perubahan kecil)
+  const updateCartItem = async (productId: string, quantity: number) => {
+    const newCart = { ...cart, [productId]: quantity };
+    
+    try {
+      // Simpan dengan mergeItem untuk update kecil
+      await AsyncStorage.mergeItem('@cart', JSON.stringify({
+        [productId]: quantity
+      }));
+      
+      setCart(newCart);
+      console.log('✅ Cart item updated:', productId, quantity);
+      
+    } catch (error: any) {
+      console.log('❌ Cart update error:', error);
+      
+      // ✅ HANDLE QUOTA EXCEEDED ERROR
+      if (error.message.includes('QuotaExceeded') || error.message.includes('Database')) {
+        console.log('🔄 Storage full, clearing some cache...');
+        
+        // Bersihkan cache lama
+        await simpleStorage.remove('@cached_products');
+        
+        // Coba save lagi
+        await simpleStorage.save('@cart', newCart);
+        setCart(newCart);
+      }
+    }
+  };
+
+  const addToCart = async (product: any) => {
+    const currentQty = cart[product.id] || 0;
+    await updateCartItem(product.id, currentQty + 1);
+  };
+
+  const removeFromCart = async (productId: string) => {
+    const newCart = { ...cart };
+    delete newCart[productId];
+    
+    await simpleStorage.save('@cart', newCart);
+    setCart(newCart);
+  };
+
+  const clearCart = async () => {
+    await simpleStorage.remove('@cart');
+    setCart({});
+  };
+
+  // Hitung total items
+  const cartCount = Object.values(cart).reduce((total: number, qty: any) => total + qty, 0);
+
+  // Get cart items sebagai array
+  const cartItems = Object.entries(cart).map(([productId, quantity]) => ({
+    productId,
+    quantity
+  }));
+
+  return {
+    cart,
+    cartItems,
+    cartCount,
+    addToCart,
+    updateCartItem,
+    removeFromCart,
+    clearCart
+  };
+};
+
+--- FILE: ./hooks/useCache.ts ---
+
+import { useState, useEffect } from 'react';
+import { simpleStorage } from '../services/storage';
+
+export const useSimpleCache = (key: string, fetchData: () => Promise<any>) => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+
+    // Cek cache dulu
+    const cached = await simpleStorage.get(key);
+    
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      return;
+    }
+
+    // Jika tidak ada cache, fetch dari API
+    try {
+      const freshData = await fetchData();
+      setData(freshData);
+      
+      // Simpan ke cache
+      await simpleStorage.save(key, freshData);
+    } catch (error) {
+      console.log('Error fetch data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshData = async () => {
+    const freshData = await fetchData();
+    setData(freshData);
+    await simpleStorage.save(key, freshData);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  return { data, loading, refreshData };
+};
+
+--- FILE: ./hooks/useCacheWithTTL.ts ---
+
+import { useEffect, useState } from "react"
+import { simpleStorage } from "../services/storage"
+
+export const useCacheWithTTL = (key: string, fetchData: () => Promise<any>) => {
+    const [data, setData] = useState(null)
+    const [loading, setLoading] = useState(true)
+
+    const TTL = 30 * 60 * 1000 // buat  menjadi 30 menit
+
+    const loadData = async() => {
+        setLoading(true)
+
+        try {
+            const cached = await simpleStorage.get(key)
+
+            if (cached && cached.timestamp) {
+                const isExpired = Date.now() - cached.timestamp > TTL;
+                if (!isExpired) {
+                    console.log('menggunakan cache data (fresh)')
+                    setData(cached.data);
+                    setLoading(false);
+                    return;
+                } else {
+                    console.log('cache sudah kadaluarsa, memuat data baru')
+                }
+
+                console.log('menggunakan cache data')
+                setData(cached.data)
+                setLoading(false)
+                return;
+            } else {
+                console.log('cache sudah kadaluarsa, memuat data baru')
+            }
+
+            const freshData = await fetchData();
+            setData(freshData)
+
+            await simpleStorage.save(key, {
+                data: freshData,
+                timestamp: Date.now()
+            })
+        } catch (error) {
+            console.log(error)
+
+            const cached = await simpleStorage.get(key);
+            if (cached && cached.data) {
+                console.log('Offline mode, menggunakan cache data')
+                setData(cached.data)
+            }
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const refreshData = async() => {
+        const freshData = await fetchData();
+        setData(freshData)
+        await simpleStorage.save(key, {
+            data: freshData, 
+            timestamp: Date.now()
+        })
+    }
+
+    useEffect(() => {
+        loadData()
+    }, [])
+
+    return {
+        data, 
+        loading, 
+        refreshData
+    }
+
+}
+
+--- FILE: ./hooks/useCart.ts ---
+
+import { useState, useEffect } from 'react';
+import { simpleStorage } from '../services/storage';
+
+export const useSimpleCart = () => {
+  const [cart, setCart] = useState<any[]>([]);
+
+  // Load cart dari storage saat app start
+  useEffect(() => {
+    loadCart();
+  }, []);
+
+  const loadCart = async () => {
+    const savedCart = await simpleStorage.get('@cart');
+    if (savedCart) {
+      setCart(savedCart);
+    }
+  };
+
+  const saveCart = async (newCart: any[]) => {
+    setCart(newCart);
+    await simpleStorage.save('@cart', newCart);
+  };
+
+  const addToCart = async (product: any) => {
+    const newCart = [...cart];
+    const existingItem = newCart.find(item => item.id === product.id);
+
+    if (existingItem) {
+      existingItem.quantity += 1;
+    } else {
+      newCart.push({ ...product, quantity: 1 });
+    }
+
+    await saveCart(newCart);
+  };
+
+  const removeFromCart = async (productId: string) => {
+    const newCart = cart.filter(item => item.id !== productId);
+    await saveCart(newCart);
+  };
+
+  return {
+    cart,
+    addToCart,
+    removeFromCart,
+    cartCount: cart.reduce((total, item) => total + item.quantity, 0)
+  };
+};
+
+--- FILE: ./hooks/useDrawerLock.ts ---
+
+import { useEffect } from 'react';
+import { useNavigation, useRoute } from '@react-navigation/native';
+
+export const useDrawerLock = (onDrawerLockChange?: (locked: boolean) => void) => {
+  const navigation = useNavigation();
+  const route = useRoute();
+
+  useEffect(() => {
+    const currentRouteName = route.name;
+    
+    // Lock drawer untuk screens tertentu
+    const lockedScreens = ['ProductDetail', 'Checkout'];
+    const shouldLock = lockedScreens.includes(currentRouteName);
+
+    console.log(`Drawer locking: ${shouldLock ? 'LOCKED' : 'UNLOCKED'} for ${currentRouteName}`);
+    
+    // Update drawer lock state
+    navigation.getParent()?.setOptions({
+      swipeEnabled: !shouldLock,
+    });
+
+    // Notify parent component
+    if (onDrawerLockChange) {
+      onDrawerLockChange(shouldLock);
+    }
+
+    // Cleanup saat unmount
+    return () => {
+      navigation.getParent()?.setOptions({
+        swipeEnabled: true,
+      });
+      if (onDrawerLockChange) {
+        onDrawerLockChange(false);
+      }
+    };
+  }, [navigation, route.name, onDrawerLockChange]);
+};
+
+--- FILE: ./hooks/useDeepLink.ts ---
+
+import { useEffect } from 'react';
+import { Linking } from 'react-native';
+import { useAdvancedCart } from './useAdvancedCart';
+
+export const useDeepLink = () => {
+  const { addToCart } = useAdvancedCart();
+
+  useEffect(() => {
+    const handleDeepLink = (url: string | null) => {
+      if (!url) return;
+      
+      console.log('🔗 Deep link received:', url);
+      
+      // ✅ SOAL f: Tangani deep link warm start untuk modifikasi state
+      if (url.startsWith('miniecom://add-to-cart/')) {
+        const productId = url.replace('miniecom://add-to-cart/', '');
+        if (productId) {
+          console.log('🛒 Adding product to cart via deep link:', productId);
+          // Simulasikan product object
+          addToCart({ 
+            id: productId, 
+            name: `Product ${productId}`,
+            price: 100000 // harga default
+          });
+        }
+      }
+    };
+
+    // Handle cold start
+    Linking.getInitialURL().then(url => {
+      handleDeepLink(url);
+    });
+
+    // Handle warm start
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    // ✅ SOAL f: Pastikan listener dibersihkan ketika unmount
+    return () => {
+      subscription.remove();
+    };
+  }, [addToCart]);
+};
+
+--- FILE: ./hooks/useProductCache.ts ---
+
+import { useState, useEffect } from 'react';
+import { simpleStorage } from '../services/storage';
+
+export const useProductCache = (productId: string) => {
+  const [cachedProduct, setCachedProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const TTL = 30 * 60 * 1000; // 30 menit
+
+  const getCachedProduct = async () => {
+    try {
+      const cacheKey = `@product_detail:${productId}`;
+      const cached = await simpleStorage.get(cacheKey);
+      
+      if (cached && cached.value && cached.ttl_product) {
+        const isExpired = Date.now() - cached.ttl_product > TTL;
+        if (!isExpired) {
+          console.log('✅ Using cached product');
+          setCachedProduct(cached.value);
+          setLoading(false);
+          return cached.value;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.log('Error reading cache:', error);
+      return null;
+    }
+  };
+
+  const saveProductToCache = async (productData: any) => {
+    try {
+      const cacheKey = `@product_detail:${productId}`;
+      await simpleStorage.save(cacheKey, {
+        value: productData,
+        ttl_product: Date.now()
+      });
+    } catch (error) {
+      console.log('Error saving to cache:', error);
+    }
+  };
+
+  const loadProduct = async (fetchProduct: () => Promise<any>) => {
+    setLoading(true);
+    
+    // Cek cache dulu
+    const cached = await getCachedProduct();
+    if (cached) {
+      setLoading(false);
+      return cached;
+    }
+
+    // Jika tidak ada cache, fetch dari API
+    try {
+      const freshData = await fetchProduct();
+      await saveProductToCache(freshData);
+      setCachedProduct(freshData);
+      setLoading(false);
+      return freshData;
+    } catch (error) {
+      console.log('Error fetching product:', error);
+      setLoading(false);
+      return null;
+    }
+  };
+
+  return {
+    cachedProduct,
+    loading,
+    loadProduct
+  };
+};
+
+--- FILE: ./hooks/useWishlist.ts ---
+
+import { useState, useEffect } from 'react';
+import { simpleStorage } from '../services/storage';
+
+export const useWishlist = () => {
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    loadWishlist();
+  }, []);
+
+  const loadWishlist = async () => {
+    try {
+      const result = await simpleStorage.multiGet(['@wishlist_ids', '@wishlist_meta']);
+      
+      if (result['@wishlist_ids']) {
+        setWishlist(result['@wishlist_ids']);
+        setCount(result['@wishlist_ids'].length);
+      }
+      
+      if (result['@wishlist_meta']) {
+        setCount(result['@wishlist_meta'].count || 0);
+      }
+    } catch (error) {
+      console.log('Error loading wishlist:', error);
+    }
+  };
+
+  const toggleWishlist = async (productId: string) => {
+    try {
+      const newWishlist = wishlist.includes(productId)
+        ? wishlist.filter(id => id !== productId)
+        : [...wishlist, productId];
+
+      const newCount = newWishlist.length;
+      
+      // Simpan dengan multiSet
+      await simpleStorage.multiSet([
+        ['@wishlist_ids', newWishlist],
+        ['@wishlist_meta', { 
+          count: newCount, 
+          updatedAt: new Date().toISOString() 
+        }]
+      ]);
+
+      setWishlist(newWishlist);
+      setCount(newCount);
+      
+      return true;
+    } catch (error) {
+      console.log('Error toggling wishlist:', error);
+      return false;
+    }
+  };
+
+  const isInWishlist = (productId: string) => {
+    return wishlist.includes(productId);
+  };
+
+  return {
+    wishlist,
+    wishlistCount: count,
+    toggleWishlist,
+    isInWishlist
+  };
+};
+
+--- FILE: ./navigation/BottomTabs.tsx ---
+
+import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import HomeStack from './HomeStack';
+import { ProfileScreen } from '../screens/ProfileScreen';
+import { useDrawerLock } from '../hooks//useDrawerLock';
+import { Text } from 'react-native';
+
+export type BottomTabParamList = {
+  HomeStack: undefined;
+  Profile: undefined;
+};
+
+const Tab = createBottomTabNavigator<BottomTabParamList>();
+
+interface BottomTabsProps {
+  userData?: any;
+  onDrawerLockChange?: (locked: boolean) => void;
+  onLogout?: () => void; // ✅ TAMBAH INI JIKA ADA
+}
+
+export default function BottomTabs({ userData, onDrawerLockChange, onLogout }: BottomTabsProps) {
+
+  // Gunakan custom hook untuk drawer locking
+  useDrawerLock(onDrawerLockChange);
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#8e8e93',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopWidth: 1,
+          borderTopColor: '#e8e8e8',
+        },
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen 
+        name="HomeStack" 
+        options={{
+          title: 'Beranda',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ color, fontSize: size }}>🏠</Text>
+          ),
+        }}
+      >
+        {(props) => <HomeStack {...props} userData={userData} />}
+      </Tab.Screen>
+      <Tab.Screen 
+          name="Profile" 
+          options={{
+            title: 'Profil',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ color, fontSize: size }}>👤</Text>
+            ),
+          }}
+        >
+          {(props) => (
+            <ProfileScreen 
+              {...props}
+              isAuthenticated={!!userData} // ✅ INI YANG PERLU DIPERBAIKI
+              userID={userData?.userID}
+              username={userData?.username}
+              email={userData?.email}
+              onLogout={onLogout} // ✅ TAMBAH INI JIKA ADA
+            />
+          )}
+        </Tab.Screen>
+    </Tab.Navigator>
+  );
+}
+
+--- FILE: ./navigation/DrawerNav.tsx ---
+
+import React, { useState } from 'react';
+import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import BottomTabs from './BottomTabs';
+import { SettingsScreen } from '../screens/SettingsScreen';
+
+const Drawer = createDrawerNavigator();
+
+// Custom Drawer Content
+const CustomDrawerContent = (props: any) => {
+  const navigation = useNavigation();
+  const { userID, username, email } = props.userData || {};
+  const { onLogout } = props;
+
+  // ✅ SIMPLE LOGOUT HANDLER
+  const handleLogout = () => {
+    console.log('🗑️ Logout clicked');
+    if (onLogout) {
+      onLogout();
+    }
+  };
+
+  return (
+    <DrawerContentScrollView {...props} style={styles.drawer}>
+      <View style={styles.drawerHeader}>
+        <Image 
+          source={{ uri: 'https://picsum.photos/100/100?random=avatar' }}
+          style={styles.avatar}
+        />
+        <Text style={styles.userName}>{username || 'Guest'}</Text>
+        <Text style={styles.userEmail}>{email || 'guest@example.com'}</Text>
+        {userID && <Text style={styles.userId}>ID: {userID}</Text>}
+      </View>
+
+      <DrawerItem
+        label="Beranda"
+        onPress={() => navigation.navigate('Main' as any)}
+        labelStyle={styles.drawerLabel}
+      />
+      <DrawerItem
+        label="Pengaturan"
+        onPress={() => navigation.navigate('Settings' as any)}
+        labelStyle={styles.drawerLabel}
+      />
+
+      {/* ✅ LOGOUT BUTTON */}
+      <View style={styles.logoutContainer}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+    </DrawerContentScrollView>
+  );
+};
+
+// Main Drawer Navigator
+interface DrawerNavProps {
+  route?: any;
+  userData?: any;
+  onLogout?: () => void; // ✅ TERIMA PROPS ONLOGOUT
+}
+
+export default function DrawerNav({ route, userData, onLogout }: DrawerNavProps) {
+  const [drawerLocked, setDrawerLocked] = useState(false);
+
+  return (
+    <Drawer.Navigator
+      drawerContent={(props) => (
+        <CustomDrawerContent 
+          {...props} 
+          userData={userData} 
+          onLogout={onLogout} // ✅ PASS KE CUSTOM DRAWER
+        />
+      )}
+      screenOptions={{
+        drawerStyle: {
+          backgroundColor: '#fff',
+          width: 280,
+        },
+        swipeEnabled: !drawerLocked,
+        headerShown: false,
+      }}
+    >
+      <Drawer.Screen name="Main">
+        {(props) => (
+          <BottomTabs 
+            {...props} 
+            userData={userData}
+            onDrawerLockChange={setDrawerLocked}
+          />
+        )}
+      </Drawer.Screen>
+      <Drawer.Screen name="Settings">
+        {(props) => (
+          <SettingsScreen 
+            {...props}
+            onDrawerLockChange={setDrawerLocked}
+            drawerLocked={drawerLocked}
+          />
+        )}
+      </Drawer.Screen>
+    </Drawer.Navigator>
+  );
+}
+
+const styles = StyleSheet.create({
+  drawer: {
+    flex: 1,
+  },
+  drawerHeader: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 12,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  userId: {
+    fontSize: 12,
+    color: '#999',
+  },
+  drawerLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  logoutContainer: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+    marginTop: 'auto',
+  },
+  logoutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./navigation/HomeStack.tsx ---
+
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { HomeScreen } from '../screens/HomeScreen';
+import { ProductDetailScreen } from '../screens/ProductDetailScreen';
+import { CheckoutScreen } from '../screens/CheckoutScreen';
+import { ProtectedRoute } from '../components/ProtectedRoute';
+import CameraScreen from '../screens/CameraScreen';
+
+export type HomeStackParamList = {
+  Home: undefined;
+  ProductDetail: { 
+    productId: string;
+    product?: any;
+  };
+  Checkout: { 
+    productId: string;
+    product: any;
+  };
+  Camera: undefined;
+};
+
+const Stack = createNativeStackNavigator<HomeStackParamList>();
+
+interface HomeStackProps {
+  userData?: any;
+}
+
+export default function HomeStack({ userData }: HomeStackProps) {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#fff',
+        },
+        headerTintColor: '#333',
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
+        headerBackTitle: 'Kembali',
+      }}
+    >
+      <Stack.Screen 
+        name="Home" 
+        component={HomeScreen}
+        options={{ 
+          title: 'Jelajahi Produk',
+          headerLeft: () => null,
+        }}
+      />
+      <Stack.Screen 
+        name="ProductDetail" 
+        component={ProductDetailScreen}
+        options={({ route }) => ({ 
+          title: route.params.product?.name || 'Detail Produk',
+        })}
+      />
+      <Stack.Screen 
+        name="Checkout" 
+        component={CheckoutScreen}
+        options={{ 
+          title: 'Checkout',
+          presentation: 'modal',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Camera" 
+        component={CameraScreen}
+        options={{ title: 'Kamera' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+--- FILE: ./navigation/RootStack.tsx ---
+
+import React, { useState, useEffect } from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Linking, Alert } from 'react-native';
+import { OnboardingScreen } from '../screens/Auth/OnboardingScreen';
+import { LoginScreen } from '../screens/Auth/LoginScreen';
+import DrawerNav from './DrawerNav';
+import { AnalyticsScreen } from '../screens/AnalyticsScreen';
+import { addAnalyticsEvent } from '../../App';
+import { simpleStorage } from '../services/storage';
+import { getToken, removeToken } from '../services/keychain';
+import { SplashScreen } from '../screens/SplashScreen';
+import { useDeepLink } from '../hooks/useDeepLink';
+
+export type RootStackParamList = {
+  Onboarding: undefined;
+  Login: undefined;
+  MainApp: undefined;
+  Analytics: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// ✅ SOAL j: Deep Linking Configuration
+const linking = {
+  prefixes: ['miniecom://'],
+  config: {
+    screens: {
+      MainApp: {
+        screens: {
+          HomeStack: {
+            screens: {
+              Home: 'home',
+              ProductDetail: 'product/:id'
+            }
+          },
+          Profile: 'profile'
+        }
+      },
+      Login: 'login'
+    }
+  },
+  
+  // Custom handling untuk deep linking
+  async getInitialURL() {
+    const url = await Linking.getInitialURL();
+    if (url) {
+      return handleDeepLinkValidation(url);
+    }
+    return null;
+  },
+  
+  subscribe(listener: (url: string) => void) {
+    const onReceiveURL = ({ url }: { url: string }) => {
+      listener(handleDeepLinkValidation(url));
+    };
+
+    const subscription = Linking.addEventListener('url', onReceiveURL);
+    return () => subscription.remove();
+  }
+};
+
+const handleDeepLinkValidation = (url: string): string => {
+  console.log('🔗 Validating deep link:', url);
+  
+  // ✅ SOAL j: Validasi params - product ID harus angka
+  if (url.includes('miniecom://product/')) {
+    const productId = url.replace('miniecom://product/', '');
+    if (!/^\d+$/.test(productId)) {
+      console.log('❌ Invalid product ID, redirecting to home');
+      Alert.alert('Tautan tidak valid', 'Tautan tidak valid, dialihkan ke beranda');
+      return 'miniecom://home';
+    }
+  }
+  
+  return url;
+};
+
+export default function RootStack() {
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ SOAL f: Gunakan deep link handler
+  useDeepLink();
+
+  // ✅ SOAL g: Load semua data startup
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  const loadAllData = async () => {
+    try {
+      // Load semua data secara paralel
+      const [userData, token, cart, wishlistData] = await Promise.all([
+        simpleStorage.get('@user_data'),
+        getToken(),
+        simpleStorage.get('@cart'),
+        simpleStorage.multiGet(['@wishlist_ids', '@wishlist_meta'])
+      ]);
+
+      console.log('✅ All data loaded:', { 
+        userData: !!userData, 
+        token: !!token,
+        cart: !!cart,
+        wishlist: !!wishlistData['@wishlist_ids']
+      });
+
+      setUserData(userData);
+      setIsLoggedIn(!!token);
+      setShowOnboarding(!userData); // Tampilkan onboarding jika pertama kali
+
+    } catch (error: any) {
+      // ✅ SOAL c: Handle access denied error
+      if (error.message && error.message.includes('access denied')) {
+        Alert.alert(
+          'Keamanan Diubah', 
+          'Keamanan perangkat diubah, mohon login ulang.',
+          [{ text: 'OK' }]
+        );
+        await removeToken();
+      }
+      console.log('❌ Error loading initial data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    addAnalyticsEvent('Onboarding completed');
+  };
+
+  const handleLogin = async (userData: any) => {
+    // ✅ SIMPLE SAVE USER DATA
+    await simpleStorage.save('@user_data', userData);
+    setUserData(userData);
+    setIsLoggedIn(true);
+    addAnalyticsEvent('User login successful');
+  };
+
+  // ✅ SOAL h: Clear Storage - Logout function
+  const handleLogout = async () => {
+    console.log('🚪 Logging out...');
+    
+    try {
+      // ✅ Hapus dari Keychain dan AsyncStorage secara paralel
+      await Promise.all([
+        removeToken(),
+        simpleStorage.multiRemove(['@user_data', '@cart', '@cached_products', '@wishlist_ids', '@wishlist_meta'])
+      ]);
+      
+      setIsLoggedIn(false);
+      setUserData(null);
+      addAnalyticsEvent('User logout');
+      
+      console.log('✅ Logout successful');
+    } catch (error) {
+      console.log('❌ Logout error:', error);
+    }
+  };
+
+  // ✅ SOAL j: Handle deep link dengan auth check
+  const handleDeepLinkWithAuth = (url: string) => {
+    if (url.includes('miniecom://product/') && !isLoggedIn) {
+      // Simpan target URL untuk redirect setelah login
+      simpleStorage.save('@pending_deeplink', url);
+      // Arahkan ke login
+      setIsLoggedIn(false);
+    }
+  };
+
+  // Tampilkan splash screen saat loading
+  if (isLoading) {
+    return <SplashScreen onLoadComplete={() => setIsLoading(false)} />;
+  }
+
+  // Tampilkan onboarding jika diperlukan
+  if (showOnboarding) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Onboarding">
+          {(props) => (
+            <OnboardingScreen
+              {...props}
+              onComplete={handleOnboardingComplete}
+              onSkip={handleOnboardingComplete}
+              screen={0}
+            />
+          )}
+        </Stack.Screen>
+      </Stack.Navigator>
+    );
+  }
+
+  return (
+    <Stack.Navigator>
+      {!isLoggedIn ? (
+        <Stack.Screen name="Login" options={{ headerShown: false }}>
+          {(props) => (
+            <LoginScreen
+              {...props}
+              onLogin={handleLogin}
+              onNavigateToRegister={() => console.log('Navigate to register')}
+            />
+          )}
+        </Stack.Screen>
+      ) : (
+        <Stack.Screen name="MainApp" options={{ headerShown: false }}>
+          {(props) => (
+            <DrawerNav 
+              {...props} 
+              userData={userData}
+              onLogout={handleLogout}
+            />
+          )}
+        </Stack.Screen>
+      )}
+      
+      <Stack.Screen 
+        name="Analytics" 
+        component={AnalyticsScreen}
+        options={{ 
+          title: 'Analytics History',
+          presentation: 'modal'
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+--- FILE: ./navigation/TopTabsNavigator.tsx ---
+
+import React from 'react';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import ProductList from '../components/ProductList';
+
+const Tab = createMaterialTopTabNavigator();
+
+export default function TopTabsNavigator() {
+    return (
+        <Tab.Navigator
+            screenOptions={{
+                tabBarLabelStyle: { 
+                    fontSize: 12,
+                    fontWeight: '600',
+                    textTransform: 'none'
+                },
+                tabBarItemStyle: { 
+                    width: 'auto',
+                    paddingHorizontal: 8
+                },
+                tabBarScrollEnabled: true,
+                tabBarIndicatorStyle: {
+                    backgroundColor: '#007AFF'
+                }
+            }}
+        >
+            <Tab.Screen name="Semua">
+                {() => <ProductList category="semua" />}
+            </Tab.Screen>
+            <Tab.Screen name="Elektronik">
+                {() => <ProductList category="electronics" />}
+            </Tab.Screen>
+            <Tab.Screen name="Kecantikan">
+                {() => <ProductList category="beauty" />}
+            </Tab.Screen>
+            <Tab.Screen name="Parfum">
+                {() => <ProductList category="fragrances" />}
+            </Tab.Screen>
+            <Tab.Screen name="Furnitur">
+                {() => <ProductList category="furniture" />}
+            </Tab.Screen>
+            <Tab.Screen name="Makanan">
+                {() => <ProductList category="groceries" />}
+            </Tab.Screen>
+        </Tab.Navigator>
+    );
+}
+
+--- FILE: ./screens/AnalyticsScreen.tsx ---
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { getAnalyticsHistory, clearAnalyticsHistory, addAnalyticsEvent } from '../../App'; // ✅ PERBAIKI IMPORT
+
+export const AnalyticsScreen: React.FC = () => {
+  const [analytics, setAnalytics] = useState<string[]>([]);
+  const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    setAnalytics(getAnalyticsHistory());
+  }, [refresh]);
+
+  const handleClearAnalytics = () => {
+    clearAnalyticsHistory(); // ✅ GUNAKAN clearAnalyticsHistory
+    setRefresh(prev => prev + 1);
+    addAnalyticsEvent('Analytics history cleared');
+  };
+
+  const handleRefresh = () => {
+    setRefresh(prev => prev + 1);
+    addAnalyticsEvent('Analytics manually refreshed');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Analytics History</Text>
+      <Text style={styles.subtitle}>Log navigasi dan event aplikasi</Text>
+
+      {/* Controls */}
+      <View style={styles.controls}>
+        <TouchableOpacity style={styles.button} onPress={handleRefresh}>
+          <Text style={styles.buttonText}>🔄 Refresh</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={[styles.button, styles.clearButton]} onPress={handleClearAnalytics}>
+          <Text style={styles.buttonText}>🗑️ Clear</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Analytics List */}
+      <ScrollView style={styles.list}>
+        {analytics.length === 0 ? (
+          <Text style={styles.emptyText}>Belum ada data analytics</Text>
+        ) : (
+          analytics.map((event, index) => (
+            <View key={index} style={styles.eventItem}>
+              <Text style={styles.eventText}>{event}</Text>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* Stats */}
+      <View style={styles.stats}>
+        <Text style={styles.statsText}>
+          Total Events: {analytics.length}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  controls: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  button: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  clearButton: {
+    backgroundColor: '#FF3B30',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  list: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  eventItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  eventText: {
+    fontSize: 12,
+    color: '#333',
+    fontFamily: 'monospace',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  stats: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+});
+
+--- FILE: ./screens/Auth/OnboardingScreen.tsx ---
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+
+interface OnboardingScreenProps {
+  onComplete: () => void;
+  onSkip: () => void;
+  screen: number;
+}
+
+export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ 
+  onComplete, 
+  onSkip, 
+  screen 
+}) => {
+  const screens = [
+    {
+      title: "Selamat Datang di E-Commerce",
+      description: "Temukan produk terbaik dengan harga terjangkau",
+      image: "🛍️"
+    },
+    {
+      title: "Belanja Mudah & Cepat",
+      description: "Proses checkout yang simpel dan aman",
+      image: "⚡"
+    },
+    {
+      title: "Siap Mulai Belanja?",
+      description: "Ayo mulai jelajahi produk kami",
+      image: "🎉"
+    }
+  ];
+
+  const currentScreen = screens[screen];
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.emoji}>{currentScreen.image}</Text>
+        <Text style={styles.title}>{currentScreen.title}</Text>
+        <Text style={styles.description}>{currentScreen.description}</Text>
+        
+        <View style={styles.indicatorContainer}>
+          {screens.map((_, index) => (
+            <View 
+              key={index} 
+              style={[
+                styles.indicator,
+                index === screen && styles.indicatorActive
+              ]} 
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.footer}>
+        {screen < screens.length - 1 ? (
+          <>
+            <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
+              <Text style={styles.skipText}>Lewati</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.nextButton} onPress={onComplete}>
+              <Text style={styles.nextText}>Lanjut</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity style={styles.getStartedButton} onPress={onComplete}>
+            <Text style={styles.getStartedText}>Mulai Belanja</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 24,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emoji: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 16,
+    color: '#333',
+  },
+  description: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 40,
+  },
+  indicatorContainer: {
+    flexDirection: 'row',
+    marginBottom: 40,
+  },
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ddd',
+    marginHorizontal: 4,
+  },
+  indicatorActive: {
+    backgroundColor: '#007AFF',
+    width: 24,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  skipButton: {
+    padding: 16,
+  },
+  skipText: {
+    color: '#666',
+    fontSize: 16,
+  },
+  nextButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  nextText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  getStartedButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+    flex: 1,
+    alignItems: 'center',
+  },
+  getStartedText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./screens/Auth/LoginScreen.tsx ---
+
+import React, { useState } from 'react';
+import { 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator 
+} from 'react-native';
+import { directLogin } from '../../services/directLogin';
+import { useNetwork } from '../../context/NetworkContext';
+import { saveToken } from '../../services/keychain';
+
+interface LoginScreenProps {
+  onLogin: (userData: any) => void;
+  onNavigateToRegister: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onNavigateToRegister }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const netInfo = useNetwork();
+
+  const handleLogin = async () => {
+    if (!username || !password) {
+      Alert.alert('Error', 'Username dan password harus diisi');
+      return;
+    }
+
+    console.log('🎯 Starting login process...', { username, password });
+    setLoading(true);
+
+    try {
+      const result = await directLogin(username, password);
+      
+      console.log('🎯 Full login result:', JSON.stringify(result, null, 2));
+      
+      if (result.success && result.data) {
+        console.log('✅ Login successful! User data:', result.data);
+        
+        // ✅ SOAL a: Simpan token ke Keychain
+        await saveToken(result.data.token); // ← PERBAIKI: await dan kurung tutup
+        
+        onLogin(result.data);
+      } else {
+        console.log('❌ Login failed:', result.error);
+        Alert.alert('Login Gagal ❌', result.error || 'Terjadi kesalahan');
+      }
+    } catch (error: any) {
+      console.log('❌ Login process error:', error);
+      Alert.alert('Error', error.message || 'Terjadi kesalahan saat login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = () => {
+    setUsername('emilys');
+    setPassword('emilyspass');
+    handleLogin();
+  };
+
+  const handleQuickLogin = () => {
+    setUsername('emilys');
+    setPassword('emilyspass');
+    console.log('⚡ Quick login - credentials set, press login button');
+  };
+
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Login ke Rits Marketplace</Text>
+      <Text style={styles.subtitle}>Masuk untuk mulai berbelanja</Text>
+
+      <View style={styles.networkStatus}>
+        <Text style={styles.networkText}>
+          📶 Status: {netInfo.isConnected ? 'Online' : 'Offline'} • {netInfo.type}
+        </Text>
+      </View>
+      
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Username</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="kminchelle"
+          value={username}
+          onChangeText={setUsername}
+          autoCapitalize="none"
+          editable={!loading}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="0lelplR"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          editable={!loading}
+        />
+      </View>
+
+      <TouchableOpacity 
+        style={[styles.loginButton, loading && styles.buttonDisabled]} 
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.loginButtonText}>🚀 Login Sekarang</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={styles.quickButton} 
+        onPress={handleQuickLogin}
+        disabled={loading}
+      >
+        <Text style={styles.quickButtonText}>⚡ Isi Credentials Cepat</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={styles.demoButton} 
+        onPress={handleDemoLogin}
+        disabled={loading}
+      >
+        <Text style={styles.demoButtonText}>🎯 Auto Login (Demo)</Text>
+      </TouchableOpacity>
+
+      {/* Debug Info */}
+      <View style={styles.debugBox}>
+        <Text style={styles.debugTitle}>Status Login:</Text>
+        <Text style={styles.debugText}>
+          {loading ? '🔄 Sedang login...' : '✅ Siap login'}
+        </Text>
+        <Text style={styles.debugText}>User: {username || 'Belum diisi'}</Text>
+      </View>
+
+      {/* Valid Credentials */}
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>Credentials untuk Testing:</Text>
+        <Text style={styles.infoText}>• kminchelle / 0lelplR</Text>
+        <Text style={styles.infoText}>• Klik "Auto Login" untuk langsung masuk</Text>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#f5f5f5',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 32,
+    color: '#666',
+  },
+  networkStatus: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  networkText: {
+    color: '#1976D2',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#333',
+  },
+  loginButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  buttonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  quickButton: {
+    backgroundColor: '#5856D6',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  demoButton: {
+    backgroundColor: '#34C759',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  demoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  debugBox: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#E65100',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  infoBox: {
+    backgroundColor: '#E8F5E8',
+    padding: 12,
+    borderRadius: 8,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#2E7D32',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+});
+
+--- FILE: ./screens/CheckoutScreen.tsx ---
+
+import React, { useState } from 'react';
+import { 
+  View, Text, TouchableOpacity, StyleSheet, Modal, 
+  TextInput, ScrollView, Alert, ActivityIndicator 
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { productService } from '../services/api';
+import { addAnalyticsEvent } from '../../App'; 
+import { useNetInfo } from '@react-native-community/netinfo';
+
+interface CheckoutScreenProps {
+  visible?: boolean;
+  onClose?: () => void;
+}
+
+export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ 
+  visible = true, 
+  onClose 
+}) => {
+  const navigation = useNavigation();
+  const route = useRoute();
+  
+  const { product } = route.params as { product: any };
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    city: '',
+    phone: '',
+    paymentMethod: 'transfer'
+  });
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [loading, setLoading] = useState(false);
+  const netInfo = useNetInfo();
+
+
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+
+    if (!formData.name.trim()) newErrors.name = 'Nama lengkap wajib diisi';
+    if (!formData.address.trim()) newErrors.address = 'Alamat wajib diisi';
+    if (!formData.city.trim()) newErrors.city = 'Kota wajib diisi';
+    if (!formData.phone.trim()) newErrors.phone = 'Nomor HP wajib diisi';
+    else if (!/^\d+$/.test(formData.phone)) newErrors.phone = 'Nomor HP harus angka';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleCheckout = async () => {
+    if (!validateForm()) return;
+
+    if (!netInfo.isConnected) {
+      Alert.alert('Offline', 'Tidak dapat proses checkout tanpa koneksi internet');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Simulasi API call dengan error handling
+      await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          // Simulasi random error untuk testing
+          const random = Math.random();
+          if (random < 0.3) {
+            reject(new Error('400 - Validasi gagal: Alamat tidak lengkap'));
+          } else if (random < 0.4) {
+            reject(new Error('500 - Server error'));
+          } else {
+            resolve(true);
+          }
+        }, 2000);
+      });
+
+      addAnalyticsEvent(`Checkout success: ${product.name}`);
+      
+      Alert.alert(
+        'Checkout Berhasil!',
+        `Pesanan ${product.name} berhasil diproses.\nTotal: Rp ${product.price.toLocaleString('id-ID')}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.goBack();
+              // Reset ke home setelah checkout
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Home' as any }],
+              });
+            }
+          }
+        ]
+      );
+
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      
+      // Handle different error types
+      if (error.message.includes('400')) {
+        setErrors({ 
+          address: 'Alamat tidak valid. Pastikan alamat lengkap dan jelas.' 
+        });
+        Alert.alert('Validasi Gagal', 'Periksa kembali data alamat Anda.');
+      } else if (error.message.includes('500')) {
+        Alert.alert('Server Error', 'Server sedang mengalami masalah. Silakan coba lagi.');
+      } else {
+        Alert.alert('Error', 'Terjadi kesalahan saat proses checkout.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+    >
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <TouchableOpacity onPress={handleClose} disabled={loading}>
+            <Text style={styles.closeButton}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content}>
+          {/* Product Summary */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Produk Dipesan</Text>
+            <View style={styles.productCard}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productPrice}>Rp {product.price.toLocaleString('id-ID')}</Text>
+            </View>
+          </View>
+
+          {/* Shipping Form */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Data Pengiriman</Text>
+            
+            <TextInput
+              style={[styles.input, errors.name && styles.inputError]}
+              placeholder="Nama Lengkap"
+              value={formData.name}
+              onChangeText={(text) => setFormData({...formData, name: text})}
+              editable={!loading}
+            />
+            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+            <TextInput
+              style={[styles.input, styles.textArea, errors.address && styles.inputError]}
+              placeholder="Alamat Lengkap"
+              value={formData.address}
+              onChangeText={(text) => setFormData({...formData, address: text})}
+              multiline
+              numberOfLines={3}
+              editable={!loading}
+            />
+            {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+
+            <TextInput
+              style={[styles.input, errors.city && styles.inputError]}
+              placeholder="Kota"
+              value={formData.city}
+              onChangeText={(text) => setFormData({...formData, city: text})}
+              editable={!loading}
+            />
+            {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
+
+            <TextInput
+              style={[styles.input, errors.phone && styles.inputError]}
+              placeholder="Nomor HP"
+              value={formData.phone}
+              onChangeText={(text) => setFormData({...formData, phone: text})}
+              keyboardType="phone-pad"
+              editable={!loading}
+            />
+            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+          </View>
+
+          {/* Payment Method */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Metode Pembayaran</Text>
+            <View style={styles.paymentOptions}>
+              {['transfer', 'cod', 'credit'].map((method) => (
+                <TouchableOpacity
+                  key={method}
+                  style={[
+                    styles.paymentOption,
+                    formData.paymentMethod === method && styles.paymentOptionSelected
+                  ]}
+                  onPress={() => setFormData({...formData, paymentMethod: method})}
+                  disabled={loading}
+                >
+                  <Text style={styles.paymentText}>
+                    {method === 'transfer' && 'Transfer Bank'}
+                    {method === 'cod' && 'Bayar di Tempat (COD)'}
+                    {method === 'credit' && 'Kartu Kredit'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Order Summary */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ringkasan Pesanan</Text>
+            <View style={styles.summaryRow}>
+              <Text>Subtotal</Text>
+              <Text>Rp {product.price.toLocaleString('id-ID')}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text>Ongkos Kirim</Text>
+              <Text>Rp 15.000</Text>
+            </View>
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalPrice}>
+                Rp {(product.price + 15000).toLocaleString('id-ID')}
+              </Text>
+            </View>
+          </View>
+
+          {/* Network Status */}
+          <View style={styles.networkInfo}>
+            <Text style={styles.networkText}>
+              📶 {netInfo.isConnected ? 'Online' : 'Offline'} • {netInfo.type}
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={[styles.checkoutButton, loading && styles.buttonDisabled]}
+            onPress={handleCheckout}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.checkoutButtonText}>
+                Bayar Rp {(product.price + 15000).toLocaleString('id-ID')}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#666',
+    padding: 4,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+  },
+  productCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 18,
+    color: '#FF3B30',
+    fontWeight: '700',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: '#FF3B30',
+    backgroundColor: '#FFF0F0',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  paymentOptions: {
+    gap: 8,
+  },
+  paymentOption: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 16,
+  },
+  paymentOptionSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#F0F8FF',
+  },
+  paymentText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  totalRow: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FF3B30',
+  },
+  networkInfo: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  networkText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  footer: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+  },
+  checkoutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  checkoutButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./screens/ProductDetailScreen.tsx ---
+
+import React from 'react';
+import { 
+  View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, 
+  useWindowDimensions, Alert 
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { Product } from '../types/types'; 
+import { useDrawerLock } from '../hooks/useDrawerLock';
+
+export const ProductDetailScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  
+  const { product } = route.params as { product: Product };
+  
+  // Lock drawer di detail screen
+  useDrawerLock();
+
+  const handleCheckout = () => {
+    navigation.navigate('Checkout' as any, { 
+      productId: product.id,
+      product 
+    });
+  };
+
+  const handleResetStack = () => {
+    // Reset ke home dan close drawer
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Home' as any }],
+    });
+    
+    // Close drawer programmatically
+    navigation.getParent()?.closeDrawer();
+    
+    Alert.alert('Sukses', 'Navigasi direset ke Home');
+  };
+
+  const handleBackToDrawerHome = () => {
+    // Navigate back ke parent drawer
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.goBack();
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handleToggleDrawer = () => {
+    // Toggle drawer dari child component
+    navigation.getParent()?.toggleDrawer();
+  };
+
+  return (
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={isLandscape && styles.landscapeContent}
+    >
+      <Image 
+        source={product.image} 
+        style={[styles.image, isLandscape && styles.landscapeImage]} 
+      />
+      
+      <View style={[styles.content, isLandscape && styles.landscapeInfo]}>
+        <Text style={styles.name}>{product.name}</Text>
+        <Text style={styles.price}>Rp {product.price.toLocaleString('id-ID')}</Text>
+        <Text style={styles.description}>{product.description}</Text>
+
+        {product.specifications && (
+          <View style={styles.specs}>
+            <Text style={styles.specsTitle}>Spesifikasi:</Text>
+            {product.specifications.map((spec, index) => (
+              <Text key={index} style={styles.specItem}>• {spec}</Text>
+            ))}
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
+          <Text style={styles.checkoutText}>Beli Sekarang</Text>
+        </TouchableOpacity>
+
+        {/* Cross-Level Navigation Actions */}
+        <View style={styles.navigationActions}>
+          <Text style={styles.actionsTitle}>Aksi Navigasi Lanjutan:</Text>
+          
+          <TouchableOpacity style={styles.navButton} onPress={handleToggleDrawer}>
+            <Text style={styles.navButtonText}>Toggle Drawer</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navButton} onPress={handleResetStack}>
+            <Text style={styles.navButtonText}>Reset ke Home</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navButton} onPress={handleBackToDrawerHome}>
+            <Text style={styles.navButtonText}>Kembali ke Drawer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  landscapeContent: {
+    flexDirection: 'row',
+  },
+  image: {
+    width: '100%',
+    height: 300,
+  },
+  landscapeImage: {
+    width: '40%',
+    height: '100%',
+  },
+  content: {
+    padding: 20,
+  },
+  landscapeInfo: {
+    flex: 1,
+    padding: 20,
+  },
+  name: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  price: {
+    fontSize: 28,
+    color: '#FF3B30',
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  specs: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  specsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  specItem: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  checkoutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  checkoutText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  navigationActions: {
+    borderTopWidth: 1,
+    borderTopColor: '#e8e8e8',
+    paddingTop: 16,
+  },
+  actionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#333',
+  },
+  navButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  navButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});
+
+--- FILE: ./screens/ProfileScreen.tsx ---
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { AuthGuard } from '../components/AuthGuard';
+
+interface ProfileScreenProps {
+  isAuthenticated?: boolean;
+  userID?: string;
+  username?: string;
+  onLogout?: () => void;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ 
+  isAuthenticated = false, 
+  userID,
+  username,
+  onLogout 
+}) => {
+  return (
+    <AuthGuard isAuthenticated={isAuthenticated}>
+      <View style={styles.container}>
+        <Text style={styles.title}>Profile</Text>
+        
+        <View style={styles.userInfo}>
+          <Text>User ID: {userID}</Text>
+          <Text>Username: {username}</Text>
+        </View>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+    </AuthGuard>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  userInfo: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  logoutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+--- FILE: ./screens/SettingsScreen.tsx ---
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { addAnalyticsEvent } from '../../App'; 
+
+interface SettingsScreenProps {
+  drawerLocked?: boolean;
+  onDrawerLockChange?: (locked: boolean) => void;
+}
+
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ 
+  drawerLocked = false, 
+  onDrawerLockChange 
+}) => {
+  const navigation = useNavigation();
+
+  const handleDrawerLockToggle = (value: boolean) => {
+    if (onDrawerLockChange) {
+      onDrawerLockChange(value);
+    }
+    addAnalyticsEvent(`Drawer ${value ? 'locked' : 'unlocked'}`);
+  };
+
+  const handleNavigateHomeAndCloseDrawer = () => {
+    navigation.navigate('Main' as any);
+    navigation.getParent()?.closeDrawer();
+    addAnalyticsEvent('Navigated to Home and closed drawer');
+  };
+
+  const handleViewAnalytics = () => {
+    navigation.navigate('Analytics' as any);
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Pengaturan</Text>
+
+      {/* Drawer Controls */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Kontrol Navigasi</Text>
+        
+        <View style={styles.settingItem}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Kunci Drawer Gesture</Text>
+            <Text style={styles.settingDescription}>
+              Mencegah drawer terbuka dengan swipe
+            </Text>
+          </View>
+          <Switch
+            value={drawerLocked}
+            onValueChange={handleDrawerLockToggle}
+            trackColor={{ false: '#f0f0f0', true: '#007AFF' }}
+          />
+        </View>
+
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={handleNavigateHomeAndCloseDrawer}
+        >
+          <Text style={styles.actionButtonText}>Ke Home & Tutup Drawer</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Analytics */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Analytics</Text>
+        
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={handleViewAnalytics}
+        >
+          <Text style={styles.actionButtonText}>Lihat Analytics History</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* App Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Informasi Aplikasi</Text>
+        
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Versi</Text>
+          <Text style={styles.infoValue}>1.0.0</Text>
+        </View>
+        
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Developer</Text>
+          <Text style={styles.infoValue}>React Native Team</Text>
+        </View>
+        
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>API</Text>
+          <Text style={styles.infoValue}>dummyjson.com</Text>
+        </View>
+      </View>
+
+      {/* Navigation Debug */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Debug Navigation</Text>
+        
+        <TouchableOpacity 
+          style={styles.debugButton}
+          onPress={() => {
+            const parent = navigation.getParent();
+            console.log('Parent navigator:', parent);
+            addAnalyticsEvent('Debug: Checked parent navigator');
+          }}
+        >
+          <Text style={styles.debugButtonText}>Check Parent Navigator</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 24,
+    color: '#333',
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+    color: '#333',
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+  },
+  actionButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  infoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  infoLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  debugButton: {
+    backgroundColor: '#FF9500',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});
+
+--- FILE: ./screens/StorageTestScreen.tsx ---
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useAdvancedCart } from '../hooks/useAdvancedCart';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const StorageTestScreen: React.FC = () => {
+  const { cartCount, addToCart, clearCart } = useAdvancedCart();
+
+  const testStorageFull = async () => {
+    // Simulasi isi storage sampai penuh
+    const bigData = new Array(10000).fill('test data').join('');
+    try {
+      await AsyncStorage.setItem('@test_big_data', bigData);
+      Alert.alert('Success', 'Storage test completed');
+    } catch (error: any) {
+      if (error.message.includes('QuotaExceeded')) {
+        Alert.alert('Storage Full', 'Quota exceeded error handled!');
+      }
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text>Cart Items: {cartCount}</Text>
+      
+      <TouchableOpacity style={styles.button} onPress={() => addToCart({id: 'test'})}>
+        <Text>Add Test Item</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={styles.button} onPress={testStorageFull}>
+        <Text>Test Storage Full</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={styles.button} onPress={clearCart}>
+        <Text>Clear Cart</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  button: { backgroundColor: '#007AFF', padding: 15, margin: 10, borderRadius: 8 }
+});
+
+--- FILE: ./screens/SplashScreen.tsx ---
+
+import React from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+
+interface SplashScreenProps {
+  onLoadComplete: () => void;
+}
+
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onLoadComplete }) => {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Mini E-Commerce</Text>
+      <ActivityIndicator size="large" color="#007AFF" />
+      <Text style={styles.loadingText}>Memuat aplikasi...</Text>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+});
+
+--- FILE: ./screens/HomeScreen.tsx ---
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { 
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, 
+  ActivityIndicator, useWindowDimensions, Alert 
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { ProductItem } from '../components/ProductItem';
+import { ProductForm } from '../components/ProductForm'; 
+import { productService } from '../services/api';
+import { Product, ProductFormData } from '../types/types';
+import { categories, initialProducts } from '../types/data';
+import { useNetwork } from '../context/NetworkContext';
+import { useSimpleCache } from '../hooks/useCache';
+import { useCacheWithTTL } from '../hooks/useCacheWithTTL';
+import TopTabsNavigator from '../navigation/TopTabsNavigator';
+
+
+const Tab = createMaterialTopTabNavigator();
+
+// Product List Component dengan API
+const ProductList: React.FC<{ 
+  category: string; 
+  onProductPress: (product: Product) => void;
+  localProducts: Product[];
+}> = ({ category, onProductPress, localProducts }) => {
+  const [apiProducts, setApiProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+  const isLandscape = width > 600;
+  const numColumns = isLandscape ? 2 : 2;
+  const netInfo = useNetwork(); 
+
+  const fetchProducts = useCallback(async () => {
+    if (!netInfo.isConnected) {
+      setError('Tidak ada koneksi internet');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+    try {
+      const result = await productService.getProducts(controller.signal);
+      
+      if (result.success && result.data) {
+        // Transform API data ke format kita
+        const transformedProducts: Product[] = result.data.products.slice(0, 10).map((apiProduct: any) => ({
+          id: apiProduct.id.toString(),
+          name: apiProduct.title,
+          price: apiProduct.price,
+          image: { uri: apiProduct.thumbnail },
+          description: apiProduct.description,
+          category: apiProduct.category,
+          specifications: [
+            `Brand: ${apiProduct.brand}`,
+            `Rating: ${apiProduct.rating}/5`,
+            `Stock: ${apiProduct.stock}`,
+            `Category: ${apiProduct.category}`
+          ]
+        }));
+        
+        setApiProducts(transformedProducts);
+      } else {
+        setError(result.error || 'Gagal memuat produk');
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setError('Request timeout - terlalu lama memuat');
+      } else {
+        setError('Gagal memuat data dari API');
+      }
+    } finally {
+      setLoading(false);
+      clearTimeout(timeoutId);
+    }
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [netInfo.isConnected]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (category === 'Populer') {
+        fetchProducts();
+      }
+    }, [category, fetchProducts])
+  );
+
+  // Combine local and API products
+  const allProducts = [...localProducts, ...apiProducts];
+  
+  // ✅ PERBAIKI FILTER PRODUCTS
+  const filteredProducts = allProducts.filter(product => {
+    switch (category) {
+      case 'Populer':
+        return apiProducts.length > 0 ? apiProducts.includes(product) : true;
+      case 'Terbaru':
+        return localProducts.includes(product);
+      case 'Diskon':
+        return product.price > 1000000; // Contoh: produk dengan harga > 1jt
+      case 'Elektronik':
+        return product.category === 'electronics';
+      case 'Pakaian':
+        return product.category === 'fashion';
+      case 'Makanan':
+        return product.category === 'food';
+      case 'Otomotif':
+        return product.category === 'automotive';
+      case 'Hiburan':
+        return product.category === 'entertainment';
+      case 'Perlengkapan Bayi':
+        return product.category === 'baby';
+      default:
+        return true;
+    }
+  });
+
+  // membuat async Storage 
+  const { data: cachedProducts, loading: cacheLoading, refreshData } = useCacheWithTTL(
+    '@cached_products',
+    async () => {
+      console.log('Fetching products from API...');
+      // Function untuk fetch products dari API
+      const result = await productService.getProducts();
+      return result.success ? result.data.products.slice(0, 10) : [];
+    }
+  );
+
+  const displayProducts = cachedProducts || localProducts;
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Memuat produk...</Text>
+      </View>
+    );
+  }
+
+  if (error && allProducts.length === 0) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+          <Text style={styles.retryText}>Coba Lagi</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={filteredProducts}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View style={[styles.productContainer, { flex: 1 / numColumns }]}>
+          <ProductItem 
+            product={item} 
+            onPress={() => onProductPress(item)}
+          />
+        </View>
+      )}
+      numColumns={2}
+      columnWrapperStyle={isLandscape ? styles.columnWrapper : undefined}
+      contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
+      ListEmptyComponent={
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Tidak ada produk di kategori {category}</Text>
+        </View>
+      }
+    />
+  );
+};
+
+// Main Home Screen
+export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const [localProducts, setLocalProducts] = useState<Product[]>(initialProducts);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const handleAddProduct = (formData: ProductFormData) => {
+    const newProduct: Product = {
+      id: Date.now().toString(),
+      name: formData.name,
+      price: Number(formData.price),
+      image: formData.image,
+      description: formData.description,
+      category: formData.category || 'general',
+    };
+    setLocalProducts(prev => [newProduct, ...prev]);
+    setModalVisible(false);
+    Alert.alert('Sukses', 'Produk berhasil ditambahkan!');
+  };
+
+  const handleProductPress = (product: Product) => {
+    navigation.navigate('ProductDetail', { 
+      productId: product.id,
+      product 
+    });
+  };
+
+  // Dynamic header title untuk tab Populer
+  useFocusEffect(
+    useCallback(() => {
+      navigation.setOptions({
+        title: 'Product ter Populer!'
+      });
+
+      return () => {
+        navigation.setOptions({
+          title: 'Jelajahi Produk'
+        });
+      };
+    }, [navigation])
+  );
+
+  const renderTabScreen = (category: string) => (
+    <ProductList 
+      category={category}
+      onProductPress={handleProductPress}
+      localProducts={localProducts}
+    />
+  );
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={styles.addButtonText}>+ Tambah Produk</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => navigation.navigate('Camera' as any)}
+      >
+        <Text style={styles.addButtonText}>📷 Tugas Kamera</Text>
+      </TouchableOpacity>
+
+      <TopTabsNavigator/>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <ProductForm
+          onSubmit={handleAddProduct}
+          onCancel={() => setModalVisible(false)}
+        />
+      </Modal>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  addButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    margin: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  listContent: {
+    padding: 8,
+  },
+  productContainer: {
+    margin: 4,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
+
+--- FILE: ./screens/CameraScreen.tsx ---
+
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { simpleStorage } from '../services/storage';
+
+export const CameraScreen: React.FC = () => {
+  const [images, setImages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // ✅ SOAL a: Pilih 5 foto + simpan
+  const pickMultipleImages = () => {
+    const options = {
+      mediaType: 'photo' as const,
+      selectionLimit: 5, // Maksimal 5 foto
+      maxWidth: 600,
+      maxHeight: 600,
+      quality: 0.7,
+    };
+
+    launchImageLibrary(options, (response) => {
+      if (response.assets) {
+        const simpleImages = response.assets.map(img => ({
+          uri: img.uri,
+          fileName: img.fileName
+        }));
+        
+        setImages(simpleImages);
+        simpleStorage.save('@ecom:newProductAssets', simpleImages); // ✅ Simpan
+        Alert.alert('Success', `${simpleImages.length} foto tersimpan`);
+      }
+    });
+  };
+
+  // ✅ SOAL c: Upload dengan loading
+  const takeAndUploadPhoto = () => {
+    const options = {
+      mediaType: 'photo' as const,
+      quality: 0.7, // Quality 0.7
+      saveToPhotos: true,
+    };
+
+    launchCamera(options, (response) => {
+      // ✅ SOAL d: Handle error kamera
+      if (response.errorCode === 'camera_unavailable') {
+        Alert.alert('Error', 'Kamera error, buka galeri?', [
+          { text: 'OK', onPress: pickMultipleImages }
+        ]);
+        return;
+      }
+
+      if (response.assets) {
+        uploadImage(response.assets[0]);
+      }
+    });
+  };
+
+  const uploadImage = async (image: any) => {
+    setLoading(true); // ✅ Mulai loading
+    
+    try {
+      // Simulasi upload
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      Alert.alert('Success', 'Upload selesai!');
+    } catch (error) {
+      Alert.alert('Error', 'Upload gagal');
+    } finally {
+      setLoading(false); // ✅ Berhenti loading (SOAL c)
+    }
+  };
+
+  // ✅ SOAL e: Base64 preview
+  const pickImageWithBase64 = () => {
+    const options = {
+      mediaType: 'photo' as const,
+      includeBase64: true,
+      maxWidth: 300,
+      maxHeight: 300,
+    };
+
+    launchImageLibrary(options, (response) => {
+      if (response.assets?.[0]?.base64) {
+        const base64 = `data:image/jpeg;base64,${response.assets[0].base64}`;
+        simpleStorage.save('@ecom:avatarPreview', base64); // ✅ Simpan base64
+        Alert.alert('Success', 'Preview disimpan untuk offline');
+      }
+    });
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Fitur Kamera</Text>
+
+      {/* Button Utama */}
+      <TouchableOpacity style={styles.button} onPress={pickMultipleImages}>
+        <Text style={styles.buttonText}>📁 Pilih 5 Foto (SOAL a)</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={takeAndUploadPhoto}>
+        <Text style={styles.buttonText}>📷 Foto & Upload (SOAL c,d)</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={pickImageWithBase64}>
+        <Text style={styles.buttonText}>👤 Simpan Preview (SOAL e)</Text>
+      </TouchableOpacity>
+
+      {/* Loading */}
+      {loading && (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text>Uploading...</Text>
+        </View>
+      )}
+
+      {/* Preview Images */}
+      {images.length > 0 && (
+        <View style={styles.preview}>
+          <Text>Foto terpilih: {images.length}</Text>
+          <Image source={{ uri: images[0].uri }} style={styles.image} />
+        </View>
+      )}
+
+      {/* Jawaban Teori SOAL e */}
+      <View style={styles.theory}>
+        <Text style={styles.theoryTitle}>Jawaban Teori:</Text>
+        <Text>Base64 → AsyncStorage (untuk preview, tidak sensitif)</Text>
+        <Text>Token → Keychain (data sensitif, butuh enkripsi)</Text>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loading: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  preview: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  image: {
+    width: 100,
+    height: 100,
+    marginTop: 10,
+  },
+  theory: {
+    marginTop: 30,
+    padding: 15,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  theoryTitle: {
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+});
+
+export default CameraScreen;
+
+--- FILE: ./services/directLogin.ts ---
+
+export const directLogin = async (username: string, password: string) => {
+  console.log('🚀 Direct login attempt:', username);
+  
+  try {
+    const response = await fetch('https://dummyjson.com/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username,
+        password,
+        expiresInMins: 60,
+      }),
+      credentials: 'include' // ✅ TAMBAHKAN INI
+    });
+
+    console.log('📡 Response status:', response.status);
+
+    const responseText = await response.text();
+    console.log('📡 Raw response:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.log('❌ JSON parse error:', e);
+      return {
+        success: false,
+        error: 'Invalid JSON response'
+      };
+    }
+
+    console.log('📡 Parsed data:', data);
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.message || `HTTP ${response.status}: ${response.statusText}`
+      };
+    }
+
+    // ✅ PERBAIKI STRUCTURE RESPONSE
+    return {
+      success: true,
+      data: {
+        userID: data.id?.toString(),
+        username: data.username,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName, 
+        image: data.image,
+        token: data.accessToken, // ✅ GUNAKAN accessToken BUKAN token
+        refreshToken: data.refreshToken
+      }
+    };
+
+  } catch (error: any) {
+    console.log('❌ Fetch error:', error);
+    return {
+      success: false,
+      error: error.message || 'Network request failed'
+    };
+  }
+};
+
+--- FILE: ./services/simpleApi.ts ---
+
+// Simple API client tanpa interceptor masalah
+export const simpleApi = {
+  async login(username: string, password: string) {
+    try {
+      console.log('🔐 Simple API Login attempt:', username);
+      
+      const response = await fetch('https://dummyjson.com/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+          expiresInMins: 60, // 1 hour
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || `HTTP ${response.status}`
+        };
+      }
+
+      // STRUCTURE YANG BENAR - langsung mapping dari response
+      return {
+        success: true,
+        data: {
+          userID: data.id.toString(),
+          username: data.username,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          image: data.image,
+          token: data.token
+        }
+      };
+
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Network error'
+      };
+    }
+  },
+
+  async getProducts() {
+    try {
+      const response = await fetch('https://dummyjson.com/products?limit=10');
+      const data = await response.json();
+      
+      return {
+        success: true,
+        data: data.products
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+};
+
+--- FILE: ./services/api.ts ---
+
+import axios from 'axios';
+import { addAnalyticsEvent } from '../../App';
+import { simpleApi } from './simpleApi';
+import * as Keychain from 'react-native-keychain';
+
+// Create axios instance
+const apiClient = axios.create({
+  baseURL: 'https://dummyjson.com',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// ✅ SOAL e: Simpan API Key ke Keychain
+const saveApiKey = async () => {
+  try {
+    await Keychain.setGenericPassword('api', 'SECRET_API_KEY_12345', {
+      service: 'com.ecom:apikey',
+    });
+    console.log('✅ API Key saved to Keychain');
+  } catch (error) {
+    console.log('❌ Failed to save API Key:', error);
+  }
+};
+
+// ✅ SOAL e: Ambil API Key dari Keychain
+const getApiKey = async (): Promise<string | null> => {
+  try {
+    const apiCred = await Keychain.getGenericPassword({ service: 'com.ecom:apikey' });
+    return apiCred ? apiCred.password : null;
+  } catch (error) {
+    console.log('❌ Failed to get API Key:', error);
+    return null;
+  }
+};
+
+// Panggil saat module load
+saveApiKey();
+
+// ✅ SOAL e: Single Request Interceptor dengan API Key
+apiClient.interceptors.request.use(
+  async (config) => {
+    try {
+      // Tambah header standard
+      config.headers['X-Client-Platform'] = 'React-Native';
+      
+      // ✅ SOAL e: Ambil API Key dari Keychain dan tambahkan ke header
+      const apiKey = await getApiKey();
+      if (apiKey) {
+        config.headers['X-API-Key'] = apiKey;
+      } else {
+        console.log('⚠️ API Key not found in Keychain');
+      }
+      
+      // Log analytics
+      addAnalyticsEvent(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      
+    } catch (error) {
+      console.log('❌ Request interceptor error:', error);
+    }
+    
+    return config;
+  },
+  (error) => {
+    console.error('Request Interceptor Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response Interceptor
+apiClient.interceptors.response.use(
+  (response) => {
+    // Log successful responses
+    if (response.status === 200) {
+      addAnalyticsEvent(`API Success: ${response.config.url}`);
+    }
+    return response;
+  },
+  (error) => {
+    console.error('Response Error:', error.response?.status, error.message);
+    
+    // Handle different error types
+    if (error.response?.status === 400) {
+      addAnalyticsEvent(`API Error 400: ${error.config.url}`);
+    } else if (error.response?.status === 401) {
+      addAnalyticsEvent(`API Error 401: Unauthorized - ${error.config.url}`);
+    } else if (error.response?.status === 404) {
+      addAnalyticsEvent(`API Error 404: ${error.config.url}`);
+    } else if (error.response?.status === 500) {
+      addAnalyticsEvent(`API Error 500: ${error.config.url}`);
+    } else if (!error.response) {
+      addAnalyticsEvent(`Network Error: ${error.message}`);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// API methods
+export const productService = {
+  async login(username: string, password: string) {
+    return await simpleApi.login(username, password);
+  },
+
+  async getProducts(signal?: AbortSignal) {
+    try {
+      const controller = new AbortController();
+      if (signal) {
+        signal.addEventListener('abort', () => controller.abort());
+      }
+
+      const response = await fetch('https://dummyjson.com/products', {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        data: data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  // ✅ SOAL e: Retry Logic dengan Exponential Backoff
+  async getProductsWithRetry(signal?: AbortSignal, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const result = await this.getProducts(signal);
+        if (result.success) {
+          return result;
+        }
+        throw new Error(result.error);
+      } catch (error: any) {
+        lastError = error;
+        
+        // Exponential backoff
+        const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.log(`Retry attempt ${attempt + 1} after ${delay}ms`);
+        
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // Jika semua retry gagal
+    throw lastError;
+  },
+
+  // Get product by ID
+  async getProductById(id: string, signal?: AbortSignal) {
+    try {
+      const response = await apiClient.get(`/products/${id}`, { signal });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  // Search products
+  async searchProducts(query: string, signal?: AbortSignal) {
+    try {
+      const response = await apiClient.get(`/products/search?q=${query}`, { signal });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  // ✅ SOAL e: Test function untuk API Key
+  async testApiKey() {
+    try {
+      const apiKey = await getApiKey();
+      return {
+        success: true,
+        apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'Not found'
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+};
+
+export default apiClient;
+
+--- FILE: ./services/keychain.ts ---
+
+import * as Keychain from 'react-native-keychain';
+import { simpleStorage } from './storage';
+
+export const saveToken = async (token: string) => {
+    try {
+        await Keychain.setGenericPassword('user', token, { 
+            service: 'com.ecom:userToken'
+        });
+        
+        // Simpan expiredAt di AsyncStorage (simulasi 1 jam dari sekarang)
+        const expiredAt = Date.now() + (60 * 60 * 1000); // 1 jam
+        await simpleStorage.save('@token_expired', expiredAt.toString());
+        
+        return true;
+    } catch (error) {
+        console.error('Error saving token:', error);
+        return false;
+    }
+}
+
+export const getToken = async () => {
+    try {
+        // Cek expiredAt dulu
+        const expiredAt = await simpleStorage.get('@token_expired');
+        if (expiredAt && Date.now() > parseInt(expiredAt)) {
+            console.log('❌ Token expired, removing...');
+            await removeToken();
+            return null;
+        }
+
+        const credentials = await Keychain.getGenericPassword({ 
+            service: 'com.ecom:userToken'
+        });
+        return credentials ? credentials.password : null;
+    } catch (error) {
+        console.error('Error getting token:', error);
+        return null;
+    }
+}
+
+export const removeToken = async () => {
+    try {
+        await Keychain.resetGenericPassword({ 
+            service: 'com.ecom:userToken'
+        });
+        await simpleStorage.remove('@token_expired');
+        return true;
+    } catch (error) {
+        console.error('Error removing token:', error);
+        return false;
+    }
+}
+
+--- FILE: ./services/storage.ts ---
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const simpleStorage = {
+  async save(key: string, data: any): Promise<boolean> {
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(data));
+      return true;
+    } catch (error) {
+      console.log('Error save:', error);
+      return false;
+    }
+  },
+
+  async get(key: string): Promise<any> {
+    try {
+      const data = await AsyncStorage.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.log('Error get:', error);
+      return null;
+    }
+  },
+
+  async remove(key: string): Promise<boolean> {
+    try {
+      await AsyncStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.log('Error remove:', error);
+      return false;
+    }
+  },
+
+  async multiGet(keys: string[]): Promise<{[key: string]: any}> {
+    try {
+      const values = await AsyncStorage.multiGet(keys);
+      const result: {[key: string]: any} = {};
+      
+      values.forEach(([key, value]) => {
+        if (value) {
+          try {
+            result[key] = JSON.parse(value);
+          } catch {
+            result[key] = value; // Jika bukan JSON, return as is
+          }
+        }
+      });
+      
+      return result;
+    } catch (error) {
+      console.log('❌ Multi-get error:', error);
+      return {};
+    }
+  },
+
+  async multiRemove(keys: string[]): Promise<boolean> {
+    try {
+      await AsyncStorage.multiRemove(keys);
+      console.log('✅ Multi-remove success for keys:', keys);
+      return true;
+    } catch (error) {
+      console.log('❌ Multi-remove error:', error);
+      return false;
+    }
+  },
+
+  async clearAll(): Promise<boolean> {
+    try {
+      // Hapus semua data kecuali yang diperlukan
+      const allKeys = await AsyncStorage.getAllKeys();
+      const keysToRemove = allKeys.filter(key => 
+        !key.startsWith('@app:') // Jangan hapus app config
+      );
+      
+      await AsyncStorage.multiRemove(keysToRemove);
+      console.log('✅ Clear storage success');
+      return true;
+    } catch (error) {
+      console.log('❌ Clear storage error:', error);
+      return false;
+    }
+  }
+}
+
+--- FILE: ./services/storageUtils.ts ---
+
+import { simpleStorage } from './storage';
+
+export const safeJSONParse = (data: string | null): any => {
+  if (!data) return null;
+  
+  try {
+    return JSON.parse(data);
+  } catch (error) {
+    console.log('❌ Corrupted data detected, removing...');
+    return null;
+  }
+};
+
+export const recoverFromCorruption = async (key: string): Promise<any> => {
+  try {
+    const rawData = await simpleStorage.get(key);
+    const parsedData = safeJSONParse(rawData);
+    
+    if (parsedData === null) {
+      console.log(`🔄 Removing corrupted data for key: ${key}`);
+      await simpleStorage.remove(key);
+      return null;
+    }
+    
+    return parsedData;
+  } catch (error) {
+    console.log(`❌ Recovery failed for ${key}:`, error);
+    await simpleStorage.remove(key);
+    return null;
+  }
+};
+
+// Utility untuk handle semua storage operations dengan safety
+export const safeStorage = {
+  async get(key: string): Promise<any> {
+    return await recoverFromCorruption(key);
+  },
+  
+  async save(key: string, data: any): Promise<boolean> {
+    try {
+      await simpleStorage.save(key, data);
+      return true;
+    } catch (error) {
+      console.log(`❌ Safe save failed for ${key}:`, error);
+      return false;
+    }
+  }
+};
+
+--- FILE: ./types/data.ts ---
+
+// import { Product } from './types';
+
+export const initialProducts = [
+  {
+    id: "1",
+    name: "Laptop Gaming RTX 4080",
+    price: 25000000,
+    image: { uri: 'https://picsum.photos/300/200?random=1' },
+    description: "Laptop gaming dengan GPU RTX 4080, processor Intel i9",
+    category: "electronics",
+    specifications: ["GPU: RTX 4080", "Processor: Intel i9", "RAM: 32GB", "Storage: 1TB SSD"]
+  },
+  {
+    id: "2", 
+    name: "Smartphone Flagship",
+    price: 15000000,
+    image: { uri: 'https://picsum.photos/300/200?random=2' },
+    description: "Smartphone flagship dengan kamera 108MP",
+    category: "electronics",
+    specifications: ["Kamera: 108MP", "Battery: 5000mAh", "Storage: 256GB"]
+  },
+  {
+    id: "3",
+    name: "Headphone Wireless",
+    price: 2500000,
+    image: { uri: 'https://picsum.photos/300/200?random=3' },
+    description: "Headphone wireless dengan noise cancellation",
+    category: "electronics"
+  },
+  {
+    id: "4",
+    name: "Smart Watch",
+    price: 3500000,
+    image: { uri: 'https://picsum.photos/300/200?random=4' },
+    description: "Smart watch dengan monitoring kesehatan",
+    category: "electronics"
+  },
+  {
+    id: "5",
+    name: "Kamera DSLR",
+    price: 12000000,
+    image: { uri: 'https://picsum.photos/300/200?random=5' },
+    description: "Kamera DSLR profesional 24MP",
+    category: "electronics"
+  },
+  {
+    id: "6",
+    name: "Sepatu Running",
+    price: 800000,
+    image: { uri: 'https://picsum.photos/300/200?random=6' },
+    description: "Sepatu running dengan cushioning terbaik",
+    category: "sports"
+  },
+  {
+    id: "7",
+    name: "Tas Laptop",
+    price: 500000,
+    image: { uri: 'https://picsum.photos/300/200?random=7' },
+    description: "Tas laptop anti air dengan banyak kompartemen",
+    category: "fashion"
+  },
+  {
+    id: "8",
+    name: "Buku Programming",
+    price: 250000,
+    image: { uri: 'https://picsum.photos/300/200?random=8' },
+    description: "Buku belajar programming lengkap",
+    category: "books"
+  },
+  {
+    id: "9",
+    name: "Mouse Gaming",
+    price: 750000,
+    image: { uri: 'https://picsum.photos/300/200?random=9' },
+    description: "Mouse gaming dengan DPI tinggi",
+    category: "electronics"
+  },
+  {
+    id: "10",
+    name: "Keyboard Mechanical",
+    price: 1200000,
+    image: { uri: 'https://picsum.photos/300/200?random=10' },
+    description: "Keyboard mechanical dengan switch blue",
+    category: "electronics"
+  },
+  {
+    id: "11",
+    name: "Monitor 4K",
+    price: 5000000,
+    image: { uri: 'https://picsum.photos/300/200?random=11' },
+    description: "Monitor 4K 27 inch untuk gaming dan desain",
+    category: "electronics"
+  },
+  {
+    id: "12",
+    name: "Power Bank 20000mAh",
+    price: 450000,
+    image: { uri: 'https://picsum.photos/300/200?random=12' },
+    description: "Power bank kapasitas besar dengan fast charging",
+    category: "electronics"
+  }
+];
+
+export const categories = [
+  'Populer', 'Terbaru', 'Diskon', 'Elektronik', 'Pakaian', 
+  'Makanan', 'Otomotif', 'Hiburan', 'Perlengkapan Bayi'
+];
+
+--- FILE: ./types/types.ts ---
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image: any;
+  description: string;
+  category?: string;
+  specifications?: string[];
+}
+
+export interface ProductFormData {
+  name: string;
+  price: string;
+  image: any;
+  description: string;
+  category?: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  token: string;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+--- FILE: ./src.txt ---
+
+
+
+--- FILE: ./AndroidManifest.xml ---
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ✅ TAMBAHKAN PERMISSION INI DI BAWAH <manifest> -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application
+        ...>
+    </application>
+</manifest>
